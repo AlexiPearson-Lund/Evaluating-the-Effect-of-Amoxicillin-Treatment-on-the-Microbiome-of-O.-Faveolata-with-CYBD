@@ -1,0 +1,3770 @@
+---
+title: "Masters Thesis CYBD Microbiome full code"
+output: html_notebook
+---
+
+# Evaluating the Impact of Antibiotic Treatments on the Microbiome of Orbicella faveolata Affected by Caribbean Yellow-Band Disease (CYBD)
+
+## Experimental Summary
+
+O.faveolata microbiome samples were taken at two time points two days appart. The first time point occurred before any treatments were applied and there were the following:
+
+T1:
+
+Diseased colonies with two CYBD lesions - tissue samples taken ~ 10cm from the lesion into the apparently healthy tissue
+
+one lesion designated for amoxicilin treatment and the other designated as untreated 
+
+Healthy control colonies showing no signs of disease - sample of healthy microbiome
+
+
+
+For treated lesions a firebreak was made around the lesion to separate it from apparently healthy tissue and amoxicillin was administered in the firebreak 
+
+
+Post-Treatment: 
+
+After treatment occurred 
+
+Diseased colonies with 2 CYBD lesions - one lesion was treated with amoxicilin as stated above and the other left untreated. Microbiome samples were taken from each of the two lesions and ~ 10cm into the surrounding healthy tissue.
+
+Healthy control colonies showing now signs of disease were also sampled
+
+
+## Setup
+AHT - apparently healthy tissue which was taken ~ 10cm from the lesion on a diseased colony - this tissue appears unaffected by disease via visual observation
+
+
+
+T1                                                                               Post-Treatment
+
+Healthy control x5 colonies                                                      Healthy control x5 colonies    
+
+
+Diseased colony (2 lesions on each colony)                                       Diseased colony (2 lesions on each colony)
+
+
+*x5 colonies*                                                                    *x5 colonies* 
+Lesion 1) AHT not designated for treatment                                       Lesion 1) untreated AHT 
+                                                                                 Lesion 1) untreated lesion
+                                                                                 
+Lesion 2) AHT pre treatment with amoxicilin                                      Lesion 2) AHT post treatment with amoxicilin 
+                                                                                 Lesion 2) Lesion post treatment with amoxicilin 
+
+Load in needed libraries:
+```{r libraries }
+setwd("C:/Users/alexi/Desktop/Thesis Project/Mote_Thesis/STX_Treatment_Microbiome")
+
+library(phyloseq)
+library(ggplot2)
+library(patchwork)
+library(vegan)
+library(multcompView)
+library("tidyverse")
+library(nlme)
+library(dplyr)
+library(compositions)
+library(corncob)
+library("ggpubr")
+library("reshape2")
+library("paletteer")
+library(tidyr)
+library(tibble)
+library(tidyverse)
+library(plotrix)
+library(plyr)
+library(GUniFrac)
+library("RColorBrewer")
+library("MicEco")
+library("microViz")
+library(microbiome)
+
+
+
+
+
+
+
+
+set.seed(07072024)
+source ("ANCOM_funcs.R")
+```
+
+```{r Loading in phyloseq}
+ps <- readRDS("Thesis_filt_Jan_15_Phyloseq.rds")
+ps
+
+#This excel has a new collum called sample_ID which instead of having the long unique identifier of the colony it is just Colony_DX (diseased +colony number) or Colony_HX (healthy + colony number). This is because it makes graphing the relative abundance downstream much better  (ie treatment and timepoint)
+
+
+new_sample_data <- read.csv("Copy of STX sample list June 2020_modified_APL_Jan_15.csv", row.names = 1)
+
+
+sample_data(ps) <- new_sample_data
+sample_data(ps)
+
+otu_table(ps)
+tax_table(ps)
+sample_data(ps)
+
+
+```
+
+
+```{r Fill in missing taxonomy data}
+tax.clean<-data.frame(tax_table(ps))
+tax.clean[is.na(tax.clean)] <- ""
+### this loop changes blanks to Unclassified_ASV#  
+for (i in 1:nrow(tax.clean)){
+  if (tax.clean[i,2] == ""){
+    kingdom <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+    tax.clean[i, 2:7] <- kingdom
+    } else if (tax.clean[i,3] == ""){
+      phylum <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 3:7] <- phylum
+    } else if (tax.clean[i,4] == ""){
+      class <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 4:7] <- class
+    } else if (tax.clean[i,5] == ""){
+      order <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 5:7] <- order
+    } else if (tax.clean[i,6] == ""){
+      family <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 6:7] <- family
+    } else if (tax.clean[i,7] == ""){
+      tax.clean$Species[i] <- paste("Unclassified_",row.names(tax.clean)[i], sep = "")
+    }
+}
+head(tax.clean)
+taxonomy2<-as.matrix(tax.clean)
+# add taxonomy to ps
+tax_table(ps)<-taxonomy2
+
+#View the taxonomy table to make sure it is correct 
+
+tax_table(ps)
+```
+
+```{r cleaning dataset}
+# Taking out six samples that were treated with another antibiotic - gentamicin Post-Treatment since the effect of this antibiotic treatment is not being looked at in this study 
+
+#note that I am keeping in treatment = "gentamicin" Pre-Treatment samples. This is because they have not been treated with anything and will be included as untreated apparently healthy tissue
+
+
+ps.nogent.s1 <- subset_samples(ps, MrDNA.sample.form.name != "001A.gentamicin.lesion_S1")
+ps.nogent.s2 <- subset_samples(ps.nogent.s1, MrDNA.sample.form.name != "001A.gentamicin.post_S1")
+ps.nogent.s3 <- subset_samples(ps.nogent.s2, MrDNA.sample.form.name != "004A.gentamicin.lesion_S1")
+ps.nogent.s4 <- subset_samples(ps.nogent.s3, MrDNA.sample.form.name != "004A.gentamicin.post_S1")
+ps.nogent.s5 <- subset_samples(ps.nogent.s4, MrDNA.sample.form.name != "006A.gentamicin.lesion_S1")
+ps <- subset_samples(ps.nogent.s5, MrDNA.sample.form.name != "006A.gentamicin.post_S1")
+
+
+
+
+
+
+sample_data(ps)
+```
+
+
+
+# Is there an effect of Treatment, Time.Point, on the microbiome? Do these factors interact? 
+
+- Data: all
+- Function: ~Treatment* Time.Point
+
+```{r #1 Data:ALL PERMANOVA  Treatment * Time.Point}
+df = as(sample_data(ps), "data.frame") #you need to convert it to a dataframe first
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps, "bray") #convert counts to bray curtis distances
+
+
+df$Treatment <- as.factor(df$Treatment)
+df$Time.Point <- as.factor(df$Time.Point)
+
+
+
+#run the permanova by Treatment* Time.Point
+PERMANOVA<- adonis2(d ~ Treatment* Time.Point,blocks=df$Coral.Colony, df)
+PERMANOVA
+
+```
+There is an effect of treatment and time point, but not of the two together 
+## Untreated Tissue Types Anlaysis 
+
+
+#1c Is there a difference between the Sample types at T2 (inlcuding lesion)
+- Data:  ps.Post.Treatment.untreat.cont - Treatement: , untreated, control  Sample.Type: untreated.lesion, untreated.apparently.healthy, control.healthy Time.Point: Post-Treatment
+- Function: Sample.Type
+(only looking at T2 because lesion was only taken at T2)
+
+```{r ps.Post-Treatment.untreat.cont.amox PERMANOVA Sample.Type  }
+
+ps.Post.Treatment<- subset_samples(ps, Time.Point == "T2")
+ps.Post.Treatment.untreat.cont<-subset_samples(ps.Post.Treatment, Treatment == "untreated"|  Treatment == "control")
+
+  sample_data(ps.Post.Treatment.untreat.cont)
+
+df = as(sample_data(ps.Post.Treatment.untreat.cont), "data.frame") #you need to convert it to a dataframe first
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.Post.Treatment.untreat.cont, "bray") #convert counts to bray curtis distances
+
+df$Sample.Type<- as.factor(df$Sample.Type)
+
+
+
+#run the permanova by Sample.Type 
+
+PERMANOVA<- adonis2(d ~Sample.Type, df)
+
+PERMANOVA
+```
+
+It is significant 
+
+#2 Multiple permanova of the tissue types 
+
+```{r}
+
+
+
+sample_data(ps.Post.Treatment.untreat.cont)
+
+sampledf<-data.frame(sample_data(ps.Post.Treatment.untreat.cont)) #convert to df
+sampledf$Sample.Type<-as.factor(sampledf$Sample.Type) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+head(sampledf$Sample.Type)
+
+info.list<-levels(sampledf$Sample.Type) #make variable of list of levels (aka types)
+info.list #this will be what we iterate through in our for loop
+
+perm.results<-c() #set up empty variable to store all PERMANOVA results
+pvals<-c() #set up empty variable to store p values
+health.status <- c()
+
+#for loop to run multiple PERMANOVAs by tissue type
+for (i in 1:length(info.list)){
+  info.leftout<-info.list[i]
+  ps_sub<-subset_samples(ps.Post.Treatment.untreat.cont,Sample.Type!=info.leftout)
+  d.sub<-phyloseq::distance(ps_sub, "bray")
+  df.new<-subset(sampledf,subset=Sample.Type!=info.leftout)
+  PERM<-adonis2(d.sub~Sample.Type,df.new)
+  print(PERM)
+
+
+  pvals<-c(pvals,PERM$'Pr(>F)'[1]) #this saves the p-values that were outputted. to confirm what this data calls its p-values, run a permanova and save the output to do str(output) to see what it call's the p-values that it outputs.
+  perm.results<-rbind(perm.results,PERM$'Pr(>F)'[1]) #add/save current aov results
+  name.sub<-info.list[-i]
+  health.status <- rbind(health.status, c(name.sub))
+
+}
+
+
+
+#results
+perm.results #see overall aov results
+PERM
+
+
+combinedtest<-cbind( health.status,pvals) #combine location and p-value data
+combinedtest
+mult_perm<-data.frame(combinedtest) #converts to a dataframe
+mult_perm
+#get the adjusted p values
+mult_perm$pvaladj<-p.adjust(mult_perm$pvals,method="bonferroni") #use the bonferroni adjustment on the p-values and save it
+
+#view results
+mult_perm
+```
+
+#3. Betadsiper of the Sample Types 
+
+
+```{r}
+
+sampledf<-data.frame(sample_data(ps.Post.Treatment.untreat.cont )) #convert to df
+sampledf$Sample.Type<-as.factor(sampledf$Sample.Type) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(ps.Post.Treatment.untreat.cont , "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Sample.Type))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod)
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+#no sigificance 
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+disper_box_Tissue<-df_g_mod%>%ggplot(aes(group,distances, fill=group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("Distance to Centroid")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("control.healthy" = "darkgrey", "untreated.apparently.healthy"= "#EEA9B8", "untreated.lesion" ="#B03060"))+ scale_color_manual(values=c("control.healthy"= "black", "untreated.apparently.healthy"= "black",  "untreated.lesion"= "black"))+
+  ggtitle("") +scale_x_discrete(labels=c('Healthy Control', 'Apparently Healthy', 'Lesion'))+
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "a",color = "red")+
+  annotate("text", x = 3, y=.13, label = "a",color = "red")
+
+disper_box_Tissue
+
+ggsave(filename="Betadisper_Tissue_Types_All_Colonies.png", plot=disper_box_Tissue, device="png", width = 15, height = 10, unit = "cm",  dpi=300)
+```
+
+#4. Tissue Type nMDs
+```{r Tissue Type nMDS}
+
+my.col <-c("#B03060", "#EEA9B8", "darkgrey" )
+names(my.col) <-c("Lesion", "Apparently Healthy", "Healthy Control")
+
+nMds <- ordinate( ps.Post.Treatment.untreat.cont, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(ps.Post.Treatment.untreat.cont, nMds, color="Sample.Type", title="") +scale_color_manual(values=c("darkgrey", "#EEA9B8", "#B03060"), name="Tissue Types",
+                       breaks=c("control.healthy", "untreated.apparently.healthy", "untreated.lesion"),
+                       labels=c("Healthy Control", "Apparently Healthy", "Lesion"))
+
+print(p1)
+
+p2 <- p1+
+ stat_ellipse(mapping=NULL) + theme_bw() 
+
+
+print(p2)
+
+
+ggsave(filename="Tissue.Types.ALL.COLONIES.png", plot=p2, device="png", width = 15, height = 10, unit = "cm",  dpi=300)
+
+
+```
+
+
+
+#5 Alpha Diversity Anlaysis of the Tissue Types
+
+```{r TT calculating alpha diversity metrics}
+#get data into correct format for calculation
+asvtab<-as.matrix((data.frame(otu_table(ps.Post.Treatment.untreat.cont))))#convert otu table to matrix
+samdf<-data.frame(sample_data(ps.Post.Treatment.untreat.cont))#convert sample data to a dataframe
+
+
+data.frame(otu_table(ps.Post.Treatment.untreat.cont))
+
+#richness
+rich <- specnumber(asvtab)
+length(rich)#check the length, should be the same as the number of samples
+
+#Shannon diversity
+shan.div <- vegan::diversity(asvtab,"shannon")
+
+#combine them all into one dataframe with the sample data
+alp <- cbind(rich, shan.div,samdf)
+alp <- rownames_to_column(alp, var = "id") #add the rownames as a column
+alphamets <- data.frame(alp)#back to dataframe from matrix
+alphamets
+```
+```{r TT alpha div wrapper}
+#use the function wrapper from the AlphaDiv_wrapperfuncs.R script to save yourself some time (and lines of code)
+source("AlphaDiv_wrapperfuncs.R")
+
+alpha_coral<-myalphamets(ps.Post.Treatment.untreat.cont) #run the function on the full dataset and save the output
+alpha_coral #check it worked
+```
+
+#6 TT Statistics of Alpha diversity 
+
+
+```{r TT average and standard error of the alpha diversity metrics}
+#If you just want the mean and the standard error of one metric at a time:
+aggregate(rich1~Sample.Type,FUN=mean,data=alpha_coral) #mean
+aggregate(rich1~Sample.Type,FUN=function(x) sd(x)/sqrt(length(x)),data=alpha_coral) #se
+
+#now use the wrapper function to get everything at once
+alpha.summary(ps.Post.Treatment.untreat.cont,sample_data(ps.Post.Treatment.untreat.cont)$Sample.Type) #must put in phyloseq object and then the sampledata variable that you are interested in
+```
+
+#7 TT Does Alpha diversity vary by Sample.Type
+
+```{r TT Use anovas (analysis of variance model) to test for significant differences among groups}
+
+#### richness: #### 
+#the anova model
+mod<-aov((rich1)~Sample.Type,data=alpha_coral)
+
+#test for normality using shapiro-wilks
+shapiro.test(mod$residuals) #if p<0.05, then the data is not NORMAL
+
+mod<-aov(log(rich1)~Sample.Type,data=alpha_coral) 
+shapiro.test(mod$residuals) # now it is normal 
+
+hist(mod$residuals)
+#get anova results
+summary(mod) #Sample.Type is significantly different 
+
+#do the multiple comparison tests (tukey)
+tuk.rich<-TukeyHSD(mod)
+
+tuk.rich 
+# AH - lesion is the only non significant 
+
+rich.letters<-multcompLetters(tuk.rich$Sample.Type[, "p adj"])$Letters #save letters for plotting
+
+#### shannon: ####
+mod<-aov((shannon1)~Sample.Type,data=alpha_coral) 
+shapiro.test(mod$residuals) #normal p-value = 0.1231
+summary(mod) # tissue type is significant
+tuk.shan<-TukeyHSD(mod)
+tuk.shan # lesion and apparently healthy are not significantly different
+shan.letters<-multcompLetters(tuk.shan$Sample.Type[, "p adj"])$Letters
+
+
+
+
+```
+
+#8 Plotting Alpha diversity metrics 
+
+
+##8a. Species Richness
+```{r richness}
+#make a box plot with region on the x-axis, and species richness on the y-axis, saved in a variable so that it can be saved later or used with patchwork
+my.colors <- c( "untreated.apparently.healthy" = "#FFC0CB", "control.healthy" = "darkgrey","untreated.lesion" = "#B03060")
+
+ric <- alpha_coral %>% ggplot(aes(Sample.Type,rich1, fill = Sample.Type, color= Sample.Type)) +theme_bw()+ 
+  geom_boxplot() + 
+  xlab("") +  
+  theme(text = element_text(size=12))+
+  ylab("Species Richness") + 
+  #ggtitle("Richness") + 
+  theme(axis.text.x = element_text(angle = 45, hjust =1))+  
+  annotate(geom="text",x=c(1,2,3),y=c(0.75,0.75,0.75),label=rich.letters[order(names(rich.letters))],color="red")+
+  scale_x_discrete(labels=c('Healthy Control', 'Apparently Healthy', 'Lesion')) + scale_color_manual(values =  c( "untreated.apparently.healthy" = "black", "control.healthy" = "black","untreated.lesion" = "black"))
+#you will need to adjust the annotate line individually, as I took the easy way out when coding this instead of making it work with anything
+r <- ric+ scale_fill_manual(values = my.colors)  #print the plot
+r
+```
+##8b.
+```{r shannon diversity}
+#make a box plot with region on the x-axis, and shannon diversity on the y-axis, saved in a variable so that it can be saved later with ggsave
+
+my.colors <- c( "untreated.apparently.healthy" = "#FFC0CB", "control.healthy" = "darkgrey","untreated.lesion" = "#B03060")
+
+shandiv <- alpha_coral%>% ggplot(aes(Sample.Type, shannon1, fill = Sample.Type, color = Sample.Type)) + theme_bw()+theme(axis.text.x = element_text(angle = 45, hjust =1))+ 
+  geom_boxplot() + 
+  xlab("")+
+  ylab("Shannon Diversity") +  theme(text = element_text(size=12)) +
+  scale_x_discrete(labels=c('Healthy Control', 'Apparently Healthy', 'Lesion')) +scale_color_manual(values =  c( "untreated.apparently.healthy" = "black", "control.healthy" = "black","untreated.lesion" = "black")) + 
+  annotate(geom="text", x=c(1,2,3),y=c(0.75,0.75,0.75),label=shan.letters[order(names(shan.letters))],color="red")
+
+
+s <- shandiv + scale_fill_manual(values = my.colors) #print the plot
+s
+```
+##8c.
+```{r diversity metrics graph all in one}
+  TT<- ggarrange(r,s,legend = "none" ) 
+
+  TT
+ggsave(filename="Sample.Type.Alpha_BOTH_Colonies.png", plot= TT, device="png", width = 20, height = 10, unit ="cm",  dpi=300)
+# By all the metrics healthy is unique 
+```
+#9 TT Relative Abundance
+```{r}
+
+
+ps.Post.Treatment<- subset_samples(ps, Time.Point == "T2")
+
+ps.Post.Treatment.untreat.cont<-subset_samples(ps.Post.Treatment, Treatment == "untreated"|  Treatment == "control")
+
+sample_data(ps.Post.Treatment.untreat.cont)
+
+# merge taxa on the class level, so that there's only 1 value for each
+physeq.f.glom <- tax_glom(ps.Post.Treatment.untreat.cont, "Family",NArm=FALSE) 
+
+# transform data from raw abundance to relative abundance
+
+physeq.f.ra.glom <- transform_sample_counts(physeq.f.glom, function(x) x*100/sum(x))
+
+# make otu table a dataframe
+propData <- as.data.frame((otu_table(physeq.f.ra.glom))) 
+head(propData)
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #within the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+  magrittr::set_names(c("sample", "taxa", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.ra.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.ra.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Sample.Type<-factor(plotDF1$Sample.Type) 
+
+# ASVs were first glommed and then counts were transformed into relative abundaces. ITS2 types that made up less than 5% of a sample's relative abundance were grouped into a <5% category to simplify the visualization. 
+# get rid of those <5% 
+plotDF1[plotDF1$relab <3, ]$Family<-"<3% abundance"
+ head(plotDF1)
+plotDF1$Family<-factor(plotDF1$Family) 
+
+
+
+
+my.colors <-c( "<3% abundance"='gray83',"AB1"= "#ffb79d", "Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',  "Blastocatellaceae"="#6F196E",  "Cellvibrionaceae" ="#7A67EE","Comamonadaceae"="#340498", "Cryomorphaceae"="blue","Cyanobacteriaceae"="#00EE76","Cyanobiaceae"= "#324DA0","Desertifilaceae" = "#ff7f50", "Enterobacteriaceae"="#C1FFC1",
+"Flavobacteriaceae"= "#359DC7", "Kangiellaceae" ="#7FFFD4", "Moraxellaceae" ="#A2CD5A", "NS9 marine group"="turquoise" ,"Pasteurellaceae" = "#548B54","Pirellulaceae"="#80C3AE", "Rhodobacteraceae"= "#B5D5BE","Rubritaleaceae" = "#ff931d",   "SAR86 clade"='navajowhite1', "Simkaniaceae"="#F8E399","Stappiaceae" = "#ff6666","Streptococcaceae"="#2E8B57","Terasakiellaceae"="#F0B950" ,"Unclassified_ASV255"= "#CA3400","Vibrionaceae"="#FFE93F")
+
+
+
+names(my.colors) <- levels(factor(plotDF1$Family)) 
+
+names(my.colors) #confirm it worked
+
+```
+
+
+
+```{r}
+#make a plot with genotype/sample name on the x-axis, relative abundance on the y-axis, and color filled by Class. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+labs <- c("Healthy Control", "Apparently Healthy", "Lesion")
+names(labs) <- c("control.healthy", "untreated.apparently.healthy","untreated.lesion")
+
+
+Tissue_Type <- ggplot(plotDF1, aes(x=plotDF1$sample_ID, relab, fill=Family)) + theme_bw() +
+  #make it a barplot with classes stacked on top of each other
+  geom_bar(stat="identity", position = "stack") + theme(axis.text.x = element_text(angle = 45,size = 17, hjust = 1)) + 
+  #set the colors being filled in by class to the mycolors variable made earlier
+  scale_fill_manual(values = my.colors,limits = levels(plotDF1$Family)) + 
+  facet_grid(~Sample.Type,space="free_x",scales="free_x",drop=TRUE, labeller = labeller(Sample.Type = labs)) + theme(strip.text.x = element_text(size = 22))+ 
+  #set legend title size to 8 and legend text size to 6
+  theme(legend.title = element_text(size = 21),legend.text = element_text(size = 21),legend.position = "bottom")+
+  xlab("")+
+  ylab("% Relative Abundance")+theme(axis.title=element_text(size=20),
+        axis.text=element_text(size=22))+ ggtitle("")
+ 
+
+Tissue_Type
+
+ 
+
+
+ggsave(filename="Tissue_Type_Relabund.png", plot=Tissue_Type, device="png", width = 43, height = 20,unit ="cm",  dpi=300)
+```
+
+#10 Calculating Mean Relative Abundance percent of each bacterial family (and finding the most abundant)
+##10a. Healthy Controls Relative Abundance Average Percents
+
+```{r}
+ra.healthy<- subset_samples(ps.Post.Treatment.untreat.cont, Sample.Type == "control.healthy")
+
+data <-
+  ra.healthy%>%
+  tax_glom("Family") %>%
+  transform_sample_counts(function(x)100* x / sum(x)) %>%
+  psmelt() %>%
+  as_tibble()
+
+
+# Now, calculate the number of samples each family is present in
+family_presence <- data %>%
+  group_by(Family) %>%
+  summarise(presence = sum(Abundance > 0))
+
+# Calculate the threshold for 10 percent of samples
+threshold <- 0.40 * n_distinct(data$Sample)
+
+# Filter for families present in at least 10 percent of the samples
+selected_families <- family_presence %>%
+  filter(presence >= threshold)
+
+# Filter the original data to retain only the selected families
+filtered_data <- data %>%
+  filter(Family %in% selected_families$Family)
+
+
+filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+#do they all sum to 100
+data %>%
+  group_by(Sample) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  pull(Abundance) %>%
+  `==`(100) %>%
+  all()
+#yes 
+
+# Flavobacteriaceae	23.379466696			
+# Terasakiellaceae	17.675908899			
+# Comamonadaceae	13.325952612			
+# Cyanobiaceae	7.896832946			
+# Streptococcaceae	3.973473535	
+# do they all sum to 100 
+
+
+#now figuring out the standard error 
+
+CH_mean <-filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+
+#this is to get the average standard error  (since it does the std from all of the family means)
+se_overall<-CH_mean%>%
+  summarise(se_Abund = std.error(Abundance, na.rm=TRUE))
+
+#0.6255355		
+
+se_by_fam <-filtered_data  %>%
+  group_by(Family) %>%
+  summarise(se_of_fam_mean = std.error(Abundance, na.rm=TRUE)) 
+
+
+selected_rows <- se_by_fam[grep("Flavobacteriaceae|Terasakiellaceae|Cyanobiaceae|Comamonadaceae|Streptococcaceae", se_by_fam$Family), ]
+
+# Comamonadaceae	5.689222			
+# Cyanobiaceae	5.050094			
+# Flavobacteriaceae	9.386134			
+# Streptococcaceae	3.930818			
+# Terasakiellaceae	5.631837	
+
+```
+
+
+
+
+
+
+##10b. Untreated Apparently Healthy Relative Abundance Average Percents
+```{r Averages For Untreated Apparently Healthy}
+
+ra.AH <- subset_samples(ps.Post.Treatment.untreat.cont, Sample.Type == "untreated.apparently.healthy")
+
+data <- tax_glom(ra.AH, "Family") %>%
+  transform_sample_counts(function(x) 100 * x / sum(x)) %>%
+  psmelt()%>%
+  as_tibble()
+
+# Now, calculate the number of samples each family is present in
+family_presence <- data %>%
+  group_by(Family) %>%
+  summarise(presence = sum(Abundance > 0))
+
+# Calculate the threshold for 40 percent of samples (I choose 40 becuse when the sample size is 5 40 percent means it in at least 2 samples)
+threshold <- 0.40 * n_distinct(data$Sample)
+
+# Filter for families present in at least 40 percent of the samples
+selected_families <- family_presence %>%
+  filter(presence >= threshold)
+
+# Filter the original data to retain only the selected families
+filtered_data <- data %>%
+  filter(Family %in% selected_families$Family)
+
+
+
+filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+# Flavobacteriaceae	33.43252100			
+# Cyanobiaceae	16.48810593			
+# Blastocatellaceae	6.68803983			
+# Actinomarinaceae	5.03313981			
+# Comamonadaceae	3.39360717	
+
+
+# do they all sum to 100 
+data %>%
+  group_by(Sample) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  pull(Abundance) %>%
+  `==`(100) %>%
+  all()
+
+# Yup 
+
+#now figuring out the standard error 
+
+AH_mean <-filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+
+#this is to get the average standard error (since it does the std from all of the family means)
+se_overall<-AH_mean%>%
+  summarise(se_Abund = std.error(Abundance, na.rm=TRUE))
+
+#0.5927838	
+
+se_by_fam <-filtered_data  %>%
+  group_by(Family) %>%
+  summarise(se_of_fam_mean = std.error(Abundance, na.rm=TRUE)) 
+
+
+selected_rows <- se_by_fam[grep("Flavobacteriaceae|Cyanobiaceae|Blastocatellaceae|Comamonadaceae|Actinomarinaceae", se_by_fam$Family), ]
+
+
+# Actinomarinaceae	1.2375727			
+# Blastocatellaceae	2.2195285			
+# Comamonadaceae	0.3687739			
+# Cyanobiaceae	2.3420465			
+# Flavobacteriaceae	5.3675886	
+
+```
+
+##10c. Lesion Relative Abundance Average Percents 
+
+```{r Lesion relative abundance average percent}
+ra.lesion <- subset_samples(ps.Post.Treatment.untreat.cont, Sample.Type == "untreated.lesion")
+
+data <-
+  ra.lesion %>%
+  tax_glom("Family") %>%
+  transform_sample_counts(function(x)100* x / sum(x)) %>%
+  psmelt() %>%
+  as_tibble()
+
+
+
+# Now, calculate the number of samples each family is present in
+family_presence <- data %>%
+  group_by(Family) %>%
+  summarise(presence = sum(Abundance > 0))
+
+# Calculate the threshold for 10 percent of samples
+threshold <- 0.40 * n_distinct(data$Sample)
+
+# Filter for families present in at least 10 percent of the samples
+selected_families <- family_presence %>%
+  filter(presence >= threshold)
+
+# Filter the original data to retain only the selected families
+filtered_data <- data %>%
+  filter(Family %in% selected_families$Family)
+
+
+filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+# Flavobacteriaceae	24.12352481			
+# Cyanobiaceae	8.16916450			
+# Rhodobacteraceae	6.77473472			
+# Rubritaleaceae	4.49187619			
+# Terasakiellaceae	4.24454235
+
+# do they all sum to 100 
+data %>%
+  group_by(Sample) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  pull(Abundance) %>%
+  `==`(100) %>%
+  all()
+
+# Yup 
+
+#now figuring out the standard error 
+
+L_mean <-filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+
+#this is to get the average standard error (since it does the std from all of the family means)
+se_overall<-L_mean%>%
+  summarise(se_Abund = std.error(Abundance, na.rm=TRUE))
+
+#0.2363523
+
+se_by_fam <-filtered_data  %>%
+  group_by(Family) %>%
+  summarise(se_of_fam_mean = std.error(Abundance, na.rm=TRUE)) 
+
+
+selected_rows <- se_by_fam[grep("Flavobacteriaceae|Cyanobiaceae|Rhodobacteraceae|Rubritaleaceae|Terasakiellaceae", se_by_fam$Family), ]
+
+
+# Cyanobiaceae	1.532256			
+# Flavobacteriaceae	5.460633			
+# Rhodobacteraceae	1.833109			
+# Rubritaleaceae	3.559911			
+# Terasakiellaceae	1.489790
+
+
+```
+
+
+#11 ***Amoxicillin Treatment analysis*** 
+
+
+```{r excluding nonrelevant data}
+#excluding the gentamicin treated colonies since n=3 for each group and lacked statistical power and just confused the paper. Six samples in total were excluded  (3 amoxicillin treated apparently healthy and 3 amoxicillin treated lesion) so they will be excluded 
+
+ps.no.D1 <- subset_samples(ps, Coral.Colony != "D1")
+ps.no.D4 <- subset_samples(ps.no.D1, Coral.Colony != "D4")
+ps<- subset_samples(ps.no.D4 , Coral.Colony != "D6")
+
+view(sample_data(ps)) 
+# check to make sure the phyloseq was correctly subsetted 
+ps
+sample_data(ps)
+```
+
+
+```{r Fill in missing taxonomy data}
+tax.clean<-data.frame(tax_table(ps))
+tax.clean[is.na(tax.clean)] <- ""
+### this loop changes blanks to Unclassified_ASV#  
+for (i in 1:nrow(tax.clean)){
+  if (tax.clean[i,2] == ""){
+    kingdom <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+    tax.clean[i, 2:7] <- kingdom
+    } else if (tax.clean[i,3] == ""){
+      phylum <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 3:7] <- phylum
+    } else if (tax.clean[i,4] == ""){
+      class <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 4:7] <- class
+    } else if (tax.clean[i,5] == ""){
+      order <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 5:7] <- order
+    } else if (tax.clean[i,6] == ""){
+      family <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 6:7] <- family
+    } else if (tax.clean[i,7] == ""){
+      tax.clean$Species[i] <- paste("Unclassified_",row.names(tax.clean)[i], sep = "")
+    }
+}
+head(tax.clean)
+taxonomy2<-as.matrix(tax.clean)
+# add taxonomy to ps
+tax_table(ps)<-taxonomy2
+
+#View the taxonomy table to make sure it is correct 
+
+tax_table(ps)
+```
+
+
+
+```{r}
+sample_data(ps)
+```
+
+
+## Data Overview:
+
+### Note: on Jan 15 2024 tissue type for control was changed from ('healthy') to ('apparently.healthy')
+If you want original tissue types make sure to change the sample data for this phyloseq 
+
+### Discription of Factors and levels 
+
+There are three factors - Treatment, Time Point, and Tissue Type 
+
+Treatment: 3 levels
+Time.Point: 2 levels
+Tissue.Type: 2 levels
+Sample.Type : 3 levels 
+
+Treatment: untreated ('untreated'), amoxicillin ('amoxicillin'), control ('control')
+
+Time.point: T1 ie right before treatment  ('T1'), Post-Treatment two days after treatment ('T2')
+
+Tissue.Type: Apparently Healthy Tissue ('apparently.healthy'), Lesion ('lesion') -- Note: this is for some of the intitial anlaysis so it was easier and I didn't need to use all of the variables 
+
+Sample.Type: Represents the type of treatment and the tissue types. I ended up using these catogories for my untreated tissue types comparison so I could easily exclude those that were treated at T2. 
+('amoxicillin.lesion'), ('amoxicillin.apparently.healthy'), ('untreated.lesion'), ('untreated.apparently.healthy'), ('control.healthy')
+
+  
+## Beta Diversity
+
+### PERMANOVAs
+
+
+#13. IN the apparently healthy tissue type (AH) including control is there an effect of treatment and time.point?
+- Data: ps.AH - Tissue.Type: apparently healthy (removed lesion), Treatment: all, Timepoint : all
+- Function: Treatment* Time.Point
+
+```{r ps.AH PERMANOVA Treatment* Time.Point}
+
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+
+df = as(sample_data(ps.AH), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.AH, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+df$Time.Point <- as.factor(df$Time.Point)
+
+
+PERMANOVA<- adonis2(d ~ Treatment* Time.Point, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+There is an effect of treatment 
+
+
+#13b. IN the diseased colonies apparently healthy tissue type (AH)  is there an effect of treatment and time.point?
+- Data: ps.AH,c - Tissue.Type: apparently healthy (removed lesion and control), Treatment: untreated and amox, Timepoint : all
+- Function: Treatment* Time.Point
+
+```{r ps.AH.no.cont PERMANOVA Treatment* Time.Point}
+
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.no.cont <- subset_samples(ps.AH,Treatment != "control")
+df = as(sample_data(ps.AH.no.cont), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.AH.no.cont, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+df$Time.Point <- as.factor(df$Time.Point)
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment* Time.Point, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+In the apparently healthy tissue type of CYBD colonies is there is an effect of both treatment and time point 
+
+
+#14 PreTreatment are the apparently healthy including control different from each other? 
+- Data: ps.AH.T1 - Tissue.Type: apparently healthy (removed lesion), Treatment: all , Timepoint :Pre
+- Function: Treatment
+
+```{r ps.AH.T1 PERMANOVA Treatment}
+
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.T1  <- subset_samples(ps.AH, Time.Point == "T1")
+
+df = as(sample_data(ps.AH.T1), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.AH.T1, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+At time one treatment is significant 
+
+
+
+#14a Betadisper of above 
+- Data: ps.AH.T1 - Tissue.Type: apparently healthy (removed lesion), Treatment: all , Timepoint :Pre
+- Function: Treatment
+
+```{r Betadisper ps.AH.T1 }
+
+treat.col <- c("amoxicillin" = "#00CDCD", "untreated" = "#EEA9B8", "control" = "darkgrey")
+
+#get data prepped to go in
+
+sampledf<-data.frame(sample_data(ps.AH.T1)) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(ps.AH.T1, "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Treatment))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod, frame = FALSE,col = c("#00CDCD", "darkgrey", "#EEA9B8"))
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+labels<-multcompLetters(mod.tukey$group[, "p adj"])$Letters
+labels <- labels[order(names(labels))]
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+disper_box<-df_g_mod%>%mutate(group= fct_relevel(group, 
+            "amoxicillin", "untreated", "control")) %>%ggplot(aes(group,distances, fill=group, color = group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(fill = group), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("Distance to Centroid")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("amoxicillin" = "#00CDCD", "untreated" = "#EEA9B8", "control" = "darkgrey"))+ ggtitle("Pre-Treatment All Treatments ")+scale_color_manual(values=c("untreated" = "black", "amoxicillin"= "black", "control"= "black"))+scale_x_discrete(labels=c( 'Amoxicillin', 'Untreated', 'Healthy Control')) + theme(plot.title = element_text(hjust = 0.5))+
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "a",color = "red")+
+  annotate("text", x = 3, y=.13, label = "a",color = "red")
+
+
+disper_box
+
+
+ggsave(filename="Pre_Treatment_Betadisper.png", plot=disper_box, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+
+
+
+
+```
+nothing is significantly different 
+
+#15. Multiple Comparisons: Pre-Treatments what treatments are significantly different?
+- Data: ps.AH.T1 Treatment: control, amox,  untreated , Tissue.Type : apparently.healthy, Time.Point: Pre-Treatment
+- Function:  Treatment 
+
+```{r AH treatments at Pre-Treatment multPERM Treatments}
+#get data ready to go in
+sampledf<-data.frame(sample_data(ps.AH.T1)) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+head(sampledf$Treatment)
+
+info.list<-levels(sampledf$Treatment) #make variable of list of levels (aka types)
+info.list #this will be what we iterate through in our for loop
+
+perm.results<-c() #set up empty variable to store all PERMANOVA results
+pvals<-c() #set up empty variable to store p values
+health.status <- c()
+
+#for loop to run multiple PERMANOVAs by tissue type
+for (i in 1:length(info.list)){ 
+  info.leftout<-info.list[i]
+  ps_sub<-subset_samples(ps.AH.T1,Treatment!=info.leftout) 
+  d.sub<-phyloseq::distance(ps_sub, "bray")
+  df.new<-subset(sampledf,subset=Treatment!=info.leftout) 
+  PERM<-adonis2(d.sub~Treatment, blocks=df$Coral.Colony,df.new) 
+  print(PERM)
+  
+  
+  pvals<-c(pvals,PERM$'Pr(>F)'[1]) #this saves the p-values that were outputted. to confirm what this data calls its p-values, run a permanova and save the output to do str(output) to see what it call's the p-values that it outputs.
+  perm.results<-rbind(perm.results,PERM$'Pr(>F)'[1]) #add/save current aov results
+  name.sub<-info.list[-i]
+  health.status <- rbind(health.status, c(name.sub))
+  
+}
+
+
+
+#results
+perm.results #see overall aov results
+PERM
+
+
+combinedtest<-cbind( health.status,pvals) #combine location and p-value data
+combinedtest
+mult_perm<-data.frame(combinedtest) #converts to a dataframe
+mult_perm
+#get the adjusted p values
+mult_perm$pvaladj<-p.adjust(mult_perm$pvals,method="bonferroni") #use the bonferroni adjustment on the p-values and save it
+
+#view results
+mult_perm 
+```
+control and amoxicilin are different but untreated and control are not which is odd biologically 
+
+#15a.Pre-Treatment all treatments nMDS
+
+```{r Pre-Treatment all treatment nMDS}
+
+ps.AH.Pre.Treatment<- subset_samples(ps.AH, Time.Point == "T1")
+
+sample_data(ps.AH.Pre.Treatment )
+
+nMds <- ordinate(ps.AH.Pre.Treatment, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(ps.AH.Pre.Treatment  , nMds, color="Treatment", title="Pre-Treatment All Treatments") +geom_point( shape =24) 
+
+#stress 0.1507295
+
+print(p1)
+
+my.col <-c("#00CDCD", "#EEA9B8", "darkgrey" )
+names(my.col) <-c("Amoxicillin", "Untreated", "Healthy Control")
+
+Pre.all <- p1+ stat_ellipse(mapping=NULL) + theme_bw() +
+  scale_color_manual(values=c("#00CDCD", "#EEA9B8", "darkgrey"), name="Treatment",
+                       breaks=c("amoxicillin", "untreated", "control"),
+                       labels=c("Amoxicillin", "Untreated", "Healthy Control")) + geom_point(size=2, shape =24) + theme(plot.title = element_text(hjust = 0.5)) +theme(plot.title = element_text(size=12))
+  
+  
+  # scale_color_discrete(breaks=c("amoxicillin", "untreated", "control"),
+  #                     labels=c('Amoxicillin', 'Untreated', 'Healthy Control')) +
+  
+print(Pre.all)
+ggsave(filename="nMDS_AH_Pre_All.png", plot=Pre.all, device="png", width = 20, height = 10,units = "cm",  dpi=300)
+```
+
+## 15b. untreated vs control healthy at Pre-Treatment 
+- Data: ps.ut.cont.T1- Tissue.Type: apparently healthy (removed lesion), Treatment: untreated,control , Timepoint :Pre-Treatment
+- Function: Treatment
+```{r}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.T1 <- subset_samples(ps.AH, Time.Point != "T2")
+ps.ut.cont.T1  <- subset_samples(ps.AH.T1, Treatment != "amoxicillin")
+
+df = as(sample_data(ps.ut.cont.T1), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.ut.cont.T1, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+Not significant which doesnt make a ton of sense biologically....but sample size is low so taking that into consideration 
+
+## 15c. untreated vs amox healthy at Pre-Treatment 
+- Data: ps.ut.amox.T1 Tissue.Type: apparently healthy (removed lesion), Treatment: untreated,amoxicillin , Timepoint :Pre-Treatment
+- Function: Treatment
+```{r}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.T1 <- subset_samples(ps.AH, Time.Point != "T2")
+ps.ut.amox.T1  <- subset_samples(ps.AH.T1, Treatment != "control")
+
+df = as(sample_data(ps.ut.amox.T1 ), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.ut.amox.T1 , "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+```
+Not significantly different as we expected 
+
+
+## 15d. control vs amox healthy Pre Treatment 
+- Data: ps.cont.amox.T1- Tissue.Type: apparently healthy (removed lesion), Treatment: control,amoxicillin , Timepoint :T1
+- Function: Treatment
+```{r}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.T1 <- subset_samples(ps.AH, Time.Point != "T2")
+ps.cont.amox.T1  <- subset_samples(ps.AH.T1, Treatment != "untreated")
+
+df = as(sample_data(ps.cont.amox.T1 ), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.cont.amox.T1 , "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+Significant difference
+
+
+
+#Post Treatment PERMANOVAS 
+
+#16. PERMANOVA Are the microbiomes different between the treatments Post Treatment?
+- Data: ps.AH.T2 Treatment: control, amox,  untreated , Tissue.Type : apparently.healthy, Time.Point: Post-Treatment
+- Function:  Treatment 
+```{r ps.AH.Post-Treatment PERMANOVA Treatment}
+
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.Post.Treatment  <- subset_samples(ps.AH, Time.Point == "T2")
+
+df = as(sample_data(ps.AH.Post.Treatment), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.AH.Post.Treatment, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+Post-Treatment Time Point is significant 
+
+#16aBetadisper of above 
+```{r Betadisper ps.AH.T2 Treatment }
+#get data prepped to go in
+
+sampledf<-data.frame(sample_data(ps.AH.Post.Treatment)) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(ps.AH.Post.Treatment, "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Treatment))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod)
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+
+labels<-multcompLetters(mod.tukey$group[, "p adj"])$Letters
+labels <- labels[order(names(labels))]
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+  disper_box_Post<-df_g_mod%>%mutate(group= fct_relevel(group, 
+            "amoxicillin", "untreated", "control")) %>%ggplot(aes(group,distances, fill=group, color = group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(fill = group), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("amoxicillin" = "#00CDCD", "untreated" = "#EEA9B8", "control" = "darkgrey"))+ ggtitle("Post-Treatment All Treatments ")+scale_color_manual(values=c("untreated" = "black", "amoxicillin"= "black", "control"= "black"))+scale_x_discrete(labels=c( 'Amoxicillin', 'Untreated', 'Healthy Control')) + theme(plot.title = element_text(hjust = 0.5))+
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "a",color = "red")+
+  annotate("text", x = 3, y=.13, label = "a",color = "red")
+
+
+
+
+
+
+
+ disper_box_Post
+
+ggsave(filename="disper_box_Post.png", plot= disper_box_Post, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+
+
+
+
+
+
+dipser_box_Post
+
+
+```
+#17 Multiple Permanova at Post-Treatment  what treatments are significant 
+- Data: ps.AH.Post-Treatment Treatment: control, amox,  untreated , Tissue.Type : apparently.healthy, Time.Point: Post-Treatment
+- Function:  Treatment 
+
+```{r AH treatments at Post-Treatment multPERM Treatments}
+#get data ready to go in
+sampledf<-data.frame(sample_data(ps.AH.Post.Treatment)) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+head(sampledf$Treatment)
+
+info.list<-levels(sampledf$Treatment) #make variable of list of levels (aka types)
+info.list #this will be what we iterate through in our for loop
+
+perm.results<-c() #set up empty variable to store all PERMANOVA results
+pvals<-c() #set up empty variable to store p values
+health.status <- c()
+
+#for loop to run multiple PERMANOVAs by tissue type
+for (i in 1:length(info.list)){ 
+  info.leftout<-info.list[i]
+  ps_sub<-subset_samples(ps.AH.Post.Treatment,Treatment!=info.leftout) 
+  d.sub<-phyloseq::distance(ps_sub, "bray")
+  df.new<-subset(sampledf,subset=Treatment!=info.leftout) 
+  PERM<-adonis2(d.sub~Treatment, blocks=df$Coral.Colony,df.new) 
+  print(PERM)
+  
+  
+  pvals<-c(pvals,PERM$'Pr(>F)'[1]) #this saves the p-values that were outputted. to confirm what this data calls its p-values, run a permanova and save the output to do str(output) to see what it call's the p-values that it outputs.
+  perm.results<-rbind(perm.results,PERM$'Pr(>F)'[1]) #add/save current aov results
+  name.sub<-info.list[-i]
+  health.status <- rbind(health.status, c(name.sub))
+  
+}
+
+
+
+#results
+perm.results #see overall aov results
+PERM
+#### Im not sure what my equivlent shoud be 
+
+combinedtest<-cbind( health.status,pvals) #combine location and p-value data
+combinedtest
+mult_perm<-data.frame(combinedtest) #converts to a dataframe
+mult_perm
+#get the adjusted p values
+mult_perm$pvaladj<-p.adjust(mult_perm$pvals,method="bonferroni") #use the bonferroni adjustment on the p-values and save it
+
+#view results
+mult_perm
+
+
+
+# pvals
+# <chr>
+# pvaladj
+# <dbl>
+# control	untreated	0.082	0.246	
+# amoxicillin	untreated	0.055	0.165	
+# amoxicillin	control	0.006	0.018
+```
+
+#17b. Post-Treatment all treatment nMDS
+```{r Post-Treatment all treatment nMDS}
+
+ps.AH.Post.Treatment<- subset_samples(ps.AH, Time.Point == "T2")
+
+sample_data(ps.AH.Post.Treatment )
+
+nMds <- ordinate(ps.AH.Post.Treatment, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(ps.AH.Post.Treatment  , nMds, color="Treatment", title="Post-Treatment All Treatments") +geom_point( shape =24) 
+
+#stress 0.1507295
+
+print(p1)
+
+my.col <-c("#00CDCD", "#EEA9B8", "darkgrey" )
+names(my.col) <-c("Amoxicillin", "Untreated", "Healthy Control")
+
+Post.all <- p1+ stat_ellipse(mapping=NULL) + theme_bw() +
+  scale_color_manual(values=c("#00CDCD", "#EEA9B8", "darkgrey"), name="Treatment",
+                       breaks=c("amoxicillin", "untreated", "control"),
+                       labels=c("Amoxicillin", "Untreated", "Healthy Control")) + geom_point(size=2, shape =24) + theme(plot.title = element_text(hjust = 0.5)) +theme(plot.title = element_text(size=12))
+  
+  
+  # scale_color_discrete(breaks=c("amoxicillin", "untreated", "control"),
+  #                     labels=c('Amoxicillin', 'Untreated', 'Healthy Control')) +
+  
+print(Post.all)
+ggsave(filename="nMDS_AH_POST_All.png", plot=Post.all, device="png", width = 20, height = 10,units = "cm",  dpi=300)
+```
+
+
+
+
+## 18a. Post Treatment: do UnTreated vs Control Differ? 
+- Data: ps.ut.cont.Post.Treatment    Tissue.Type: apparently healthy (removed lesion), Treatment: untreated,control , Timepoint :Post-Treatment
+- Function: Treatment
+```{r}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.Post.Treatment <- subset_samples(ps.AH, Time.Point != "T1")
+ps.ut.cont.Post.Treatment  <- subset_samples(ps.AH.Post.Treatment, Treatment != "amoxicillin")
+
+df = as(sample_data(ps.ut.cont.Post.Treatment), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.ut.cont.Post.Treatment, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+They are not significantly different
+
+## 18b.Post Treatment:  untreated vs amox healthy 
+- Data:ps.ut.amox.Post.Treatment- Tissue.Type: apparently healthy (removed lesion), Treatment: untreated,control , Timepoint :Post-Treatment
+- Function: Treatment
+
+```{r ps.ut.amox.Post.Treatment}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.Post.Treatment <- subset_samples(ps.AH, Time.Point != "Pre-Treatment")
+ps.ut.amox.Post.Treatment  <- subset_samples(ps.AH.Post.Treatment, Treatment != "control")
+
+df = as(sample_data(ps.ut.amox.Post.Treatment), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.ut.amox.Post.Treatment, "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+untreated vs amox is different after treatment 
+
+## 18c.control vs amox Post Treatment 
+- Data:ps.ut.amox.Post-Treatment- Tissue.Type: apparently healthy (removed lesion), Treatment: Amoxicillin,control , Timepoint :Post-Treatment
+- Function: Treatment
+```{r}
+ps.AH <- subset_samples(ps, Tissue.Type != "lesion")
+ps.AH.Post.Treatment <- subset_samples(ps.AH, Time.Point != "Pre-Treatment")
+ps.amox.cont.Post.Treatment  <- subset_samples(ps.AH.Post.Treatment, Treatment != "untreated")
+
+df = as(sample_data(ps.amox.cont.Post.Treatment ), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.amox.cont.Post.Treatment , "bray") 
+
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Tissue Type ()
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+Post.Treatment control vs amox was significant
+
+
+Post-Treatment control vs amox was significant
+#18d. Betadisper of Post Treatment Control vs Amox
+```{r}
+#get data prepped to go in
+
+sampledf<-data.frame(sample_data(ps.amox.cont.Post.Treatment )) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(ps.amox.cont.Post.Treatment , "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Treatment))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod)
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+
+labels<-multcompLetters(mod.tukey$group[, "p adj"])$Letters
+labels <- labels[order(names(labels))]
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+disper_box_Post_amox_control<-df_g_mod%>%ggplot(aes(group,distances, fill=group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(fill = group), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("Distance to Centroid")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("amoxicillin" = "#00CDCD", "untreated" = "#EEA9B8", "control" = "darkgrey"))+ ggtitle("Apparently Healthy Post-Treatment: Amoxicillin vs Control")+
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "a",color = "red")
+
+
+disper_box_Post_amox_control
+
+ggsave(filename="Apparently_Healthy_Post_Amox_Control.png", plot=disper_box_Post_amox_control, device="png", width = 12, height = 8, dpi=500)
+
+```
+
+
+It isnt significant 
+#18e. Betadisper Post Treatment Untreated vs Amox 
+```{r Betadisper ps.AH.Post-Treatment Treatment }
+#get data prepped to go in
+
+sampledf<-data.frame(sample_data(ps.ut.amox.Post.Treatment)) #convert to df
+sampledf$Treatment<-as.factor(sampledf$Treatment) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(ps.ut.amox.Post.Treatment, "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Treatment))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod)
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+
+labels<-multcompLetters(mod.tukey$group[, "p adj"])$Letters
+labels <- labels[order(names(labels))]
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+disper_box_AH_Post_amox_untreated<-df_g_mod%>%mutate(group= fct_relevel(group, 
+            "Amoxicillin", "Untreated"))%>%ggplot(aes(group,distances, fill=group, color = group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(fill = group), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("Distance to Centroid")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("amoxicillin" = "#00CDCD", "untreated" = "#EEA9B8"))+ ggtitle("") +scale_color_manual(values=c("amoxicillin" = "black",  "untreated"= "black"))+
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "a",color = "red")
+ 
+
+
+disper_box_AH_Post_amox_untreated
+
+
+
+ggsave(filename="Betadisper_AH_POST_AMOX_UT_dark.png", plot=disper_box_AH_Post_amox_untreated, device="png", width = 12, height = 8, dpi=500)
+
+
+
+```
+It isnt significant 
+
+# Pairwise comparisons of each treatment at Pre-Treatment vs Post-Treatment (Pre vs Post )
+
+
+# 19. Do the control samples vary through time? 
+- Data: cont.only Treatment: control , Tissue.Type : apparently.healthy, Time.Point: Pre, Post 
+- Function:  Time.Point
+
+```{r control only PERMANOVA Time.Point}
+cont.only  <- subset_samples(ps, Treatment == "control")
+
+df = as(sample_data(cont.only), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(cont.only, "bray") 
+
+df$Time.Point <- as.factor(df$Time.Point)
+
+#run the PERMANOVA 
+PERMANOVA<- adonis2(d ~  Time.Point, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+
+control does not vary through time as expected 
+
+#20.  Does untreated AH vary through time
+- Data: untreated.only  Treatment: untreated, Tissue.Type : apparently healthy, Time.Point: Pre-Treatment, Post-Treatment 
+- Function:  Time.Point
+
+```{r untreated only PERMANOVA Time.Point}
+untreated.AH.only  <- subset_samples(ps.AH, Treatment == "untreated")
+
+df = as(sample_data(untreated.AH.only), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(untreated.AH.only, "bray") 
+
+df$Time.Point <- as.factor(df$Time.Point)
+
+#run the PERMANOVA 
+PERMANOVA<- adonis2(d ~  Time.Point, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+```
+
+They do not vary through time as expected 
+
+#21. Does  amox vary with time point?
+- Data: only.amox - Treatement: amox,  Tissue.Type: apparently.healthy Time.Point: Pre-Treatment, Post-Treatment 
+- Function: Time.Point
+
+
+```{r only amox PERMANOVA Time.Point  }
+
+only.amox  <- subset_samples(ps.AH, Treatment == "amoxicillin")
+
+df = as(sample_data(only.amox), "data.frame")
+
+#get your bray curtis distances 
+d = phyloseq::distance(only.amox, "bray") 
+
+df$Time.Point <- as.factor(df$Time.Point)
+
+#run the PERMANOVA 
+PERMANOVA<- adonis2(d ~  Time.Point, blocks=df$Coral.Colony, df) 
+PERMANOVA
+
+
+```
+
+The bacterial communities are different after treatment with amoxicilin 
+#21b Betadisper of above
+```{r Betadisper  only amox  Time.Point }
+#get data prepped to go in
+
+sampledf<-data.frame(sample_data(only.amox )) #convert to df
+sampledf$Time.Point<-as.factor(sampledf$Time.Point) #the recent R update has trouble with assigning proper formats to variables so this sets it as a factor (the proper format)
+
+d_mat<-phyloseq::distance(only.amox , "bray")
+
+#run the betadisper function
+g_mod<-with(sampledf,betadisper(d_mat,Time.Point))
+g_mod
+
+#visualize results as boxplot
+boxplot(g_mod)
+
+#run the post-hoc test
+mod.tukey<-TukeyHSD(g_mod)
+mod.tukey
+
+#significantly different 
+
+df_g_mod<- data.frame(group = g_mod$group, distances = g_mod$distances)
+
+disper_box_AH_amox_PRE_POST<-df_g_mod%>%mutate(group= fct_relevel(group, 
+            "T1", "T2")) %>%ggplot(aes(group,distances, fill=group, color = group)) +
+  geom_boxplot() + 
+   theme_bw()+
+  geom_point(aes(shape = group), position = position_jitter(width=.2, height=0), size = 1,alpha=0.3) +
+  xlab("") + 
+  theme(legend.position="none")+ 
+  theme(text = element_text(size=12))+
+  ylab("Distance to Centroid")  + 
+  theme(axis.text.x = element_text(angle = 45,hjust=1)) +  
+  theme(strip.text.x = element_text(size = 12))+
+  scale_fill_manual(values=c("T1" = "white", "T2"= "#00CDCD"))+ 
+  scale_color_manual(values=c("T1" = "#00CDCD", "T2"= "black"))+ ggtitle("Amoxicillin Pre- and Post-Treatment")+scale_x_discrete(labels=c('Pre-Treatment', 'Post-Treatment')) + theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = 1, y=.13, label = "a", color = "red")+
+  annotate("text", x = 2, y=.13, label = "b",color = "red")
+
+
+
+
+
+
+
+
+disper_box_AH_amox_PRE_POST
+
+ggsave(filename="Betadisper_AH_amox_PRE_POST.png", plot=disper_box_AH_amox_PRE_POST, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+```
+It is significantly different 
+
+
+#21c.Betasisper of combined untreated and amoxicillin and amoxicillin Pre and Post 
+
+```{r}
+betadisper_arranged<- ggarrange(disper_box_AH_amox_PRE_POST,  disper_box_Post)
+betadisper_arranged
+
+ggsave(filename="Betadisper_AH_amox_PRE_POST_AMOX_UT.png", plot=betadisper_arranged, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+```
+
+
+#22. NMDS Post-Treatment All Treatments
+
+```{r nMDS Post-Treatment All Treatments}
+
+ps.AH.Post.Treatment<- subset_samples(ps.AH, Time.Point == "T2")
+
+sample_data(ps.AH.Post.Treatment )
+
+nMds <- ordinate(ps.AH.Post.Treatment, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(ps.AH.Post.Treatment  , nMds, color="Treatment", title="Post-Treatment All Treatments") +geom_point( shape =24) 
+
+#stress 0.1507295
+
+print(p1)
+
+my.col <-c("#00CDCD", "#EEA9B8", "darkgrey" )
+names(my.col) <-c("Amoxicillin", "Untreated", "Healthy Control")
+
+Post.all <- p1+ stat_ellipse(mapping=NULL) + theme_bw() +
+  scale_color_manual(values=c("#00CDCD", "#EEA9B8", "darkgrey"), name="Treatment",
+                       breaks=c("amoxicillin", "untreated", "control"),
+                       labels=c("Amoxicillin", "Untreated", "Healthy Control")) + geom_point(size=2, shape =24) + theme(plot.title = element_text(hjust = 0.5)) +theme(plot.title = element_text(size=12))
+  
+  
+  # scale_color_discrete(breaks=c("amoxicillin", "untreated", "control"),
+  #                     labels=c('Amoxicillin', 'Untreated', 'Healthy Control')) +
+  
+print(Post.all)
+ggsave(filename="nMDS_AH_POST_All.png", plot=Post.all, device="png", width = 20, height = 10,units = "cm",  dpi=300)
+```
+
+
+
+
+
+
+
+
+
+
+#23. nMDS of Apparently Healthy Tissue pre- and post-treatment with amoxicillin
+
+
+```{r nMDS of Apparently Healthy Tissue pre- and post-treatment with amoxicillin }
+
+only.amox  <- subset_samples(ps.AH, Treatment == "amoxicillin")
+
+sample_data(only.amox)
+nMds <- ordinate(only.amox, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+
+
+
+p1_onlyamox = plot_ordination(only.amox , nMds, color = "Treatment", shape = "Time.Point", title="Amoxicillin Pre- and Post-Treatment")+ scale_color_manual(values = c("amoxicillin" = "#00CDCD"), labels=c('Amoxicillin')) + scale_shape_discrete(name = "Time Point", breaks = c("T1", "T2"), labels=c("Pre-Treatment", "Post-Treatment"))
+print(p1_onlyamox )
+
+
+amox.Pre.Treatment.Post.Treatment <- p1_onlyamox +
+ stat_ellipse(mapping=NULL) +theme_bw() +theme(plot.title = element_text(hjust = 0.5))+ theme(plot.title = element_text(size=12))+
+  scale_color_manual(values=c("#00CDCD", "#EEA9B8", "darkgrey"), name="Treatment",
+                       breaks=c("amoxicillin", "untreated", "control"),
+                       labels=c("Amoxicillin", "Untreated", "Healthy Control"))   #set colors to what you want  
+  
+
+
+
+print(amox.Pre.Treatment.Post.Treatment)
+
+ggsave(filename="amox.Pre.Treatment.Post.Treatment.png", plot=amox.Pre.Treatment.Post.Treatment, device="png", width = 20, height = 10, units = "cm",  dpi=300)
+```
+
+#23a.a Combining Both Graphs 
+
+```{r nMDS Amoxicilling Pre- and Post Treatment + All Treatments Post-Treatment}
+
+  final <- ggarrange(amox.Pre.Treatment.Post.Treatment, Post.all,
+  common.legend = TRUE, legend = "right")  +  scale_color_manual(limits = c("untreated", "amoxicillin"),values = c("#EEA9B8","#00CDCD"), labels = c("Amoxicillin", "Untreated", "Healthy Control"))
+
+final 
+
+
+ggsave(filename="AH_amox_UT_PRE_POST.png", plot=final, device="png", width = 20, height = 10,units = "cm",  dpi=300)
+```
+
+#24 Alpha diversity of Amoxicillin and Untreated Pre- and Post-Treatment
+
+
+Data: ps.AH.no.cont 
+Tissue.Type - apparently.healthy, Treatment - amox and untreated, Time.Point - Pre and post Treatment 
+
+```{r calculating alpha diversity metrics}
+#get data into correct format for calculation
+ps.AH.no.cont <- subset_samples(ps.AH,Treatment != "control")
+sample_data(ps.AH.no.cont)
+
+asvtab<-as.matrix((data.frame(otu_table(ps.AH.no.cont))))#convert otu table to matrix
+samdf<-data.frame(sample_data(ps.AH.no.cont))#convert sample data to a dataframe
+
+data.frame(otu_table(ps.AH.no.cont))
+
+#richness
+rich <- specnumber(asvtab)
+length(rich)#check the length, should be the same as the number of samples
+
+#Shannon diversity
+shan.div <- vegan::diversity(asvtab,"shannon")
+
+#Inverse Simpson
+#inv.simp <- vegan::diversity(asvtab, "inv")
+
+#combine them all into one dataframe with the sample data
+alp <- cbind(rich, shan.div, samdf)
+alp <- rownames_to_column(alp, var = "id") #add the rownames as a column
+alphamets <- data.frame(alp)#back to dataframe from matrix
+alphamets
+```
+```{r alpha div wrapper}
+#use the function wrapper from the AlphaDiv_wrapperfuncs.R script to save yourself some time (and lines of code)
+source("AlphaDiv_wrapperfuncs.R")
+
+alpha_coral<-myalphamets(ps.AH.no.cont) #run the function on the full dataset and save the output
+alpha_coral #check it worked
+```
+
+```{r average and standard error of the alpha diversity metrics}
+#If you just want the mean and the standard error of one metric at a time:
+aggregate(rich1~Treatment.Time,FUN=mean,data=alpha_coral) #mean
+aggregate(rich1~Treatment.Time,FUN=function(x) sd(x)/sqrt(length(x)),data=alpha_coral) #se
+
+#now use the wrapper function to get everything at once
+alpha.summary(ps.AH.no.cont,sample_data(ps.AH.no.cont)$Treatment.Time) #must put in phyloseq object and then the sampledata variable that you are interested in
+```
+
+
+
+```{r Use anovas (analysis of variance model) to test for significant differences among groups}
+
+#### richness: #### 
+#the anova model
+mod<-aov((rich1)~Treatment.Time.Type,data=alpha_coral)
+
+#test for normality using shapiro-wilks
+shapiro.test(mod$residuals) #if p<0.05, then the data is not NORMAL
+#normal
+hist(mod$residuals)
+#get anova results
+summary(mod) #
+
+#do the multiple comparison tests (tukey)
+tuk.rich<-TukeyHSD(mod)
+tuk.rich 
+
+# only ut Pre-Treatment and amox Post-Treatment are differnt 
+
+rich.letters<-multcompLetters(tuk.rich$Treatment.Time[, "p adj"])$Letters #save letters for plotting
+
+#### shannon: ####
+mod<-aov((shannon1)~Treatment.Time.Type,data=alpha_coral) 
+shapiro.test(mod$residuals) 
+#it wasn't normal
+
+hist(mod$residuals)
+
+
+
+
+mod<-aov((shannon1)^2~Treatment.Time.Type,data=alpha_coral) 
+shapiro.test(mod$residuals)
+#### this kind of worked its now slightly higher then .05 ####
+summary(mod) 
+tuk.shan<-TukeyHSD(mod)
+tuk.shan # lesion and apparently healthy are not significantly different
+shan.letters<-multcompLetters(tuk.shan$Treatment.Time[, "p adj"])$Letters
+
+
+```
+
+#25 Plotting Alpha diversity metrics 
+
+```{r richness}
+#make a box plot with region on the x-axis, and species richness on the y-axis, saved in a variable so that it can be saved later or used with patchwork
+
+
+ric <- alpha_coral%>% mutate(Treatment.Time.Type= fct_relevel(Treatment.Time.Type, 
+            "amoxicillin.apparently.healthy.T1", "amoxicillin.apparently.healthy.T2","untreated.apparently.healthy.T1","untreated.apparently.healthy.T2"))%>% ggplot(aes(Treatment.Time.Type, rich1, fill = Treatment.Time.Type, color = Treatment.Time.Type)) + 
+  geom_boxplot() + 
+  xlab("") +  theme_bw()+
+  theme(text = element_text(size=12))+
+  ylab("Species Richness") + 
+  #ggtitle("Richness") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + annotate("text", x = 1, y=70, label = "ab", color = "red")+
+  annotate("text", x = 2, y=70, label = "a",color = "red")+ annotate("text", x = 3, y=70, label = "b", color = "red")+
+  annotate("text", x = 4, y=70, label = "ab",color = "red")+
+  scale_fill_manual(values=c( "amoxicillin.apparently.healthy.T1"= "white" ,"amoxicillin.apparently.healthy.T2" = "#00CDCD","untreated.apparently.healthy.T1" = "white","untreated.apparently.healthy.T2" = "#EEA9B8" ))+ scale_color_manual(values = c("amoxicillin.apparently.healthy.T1"= "#00CDCD","amoxicillin.apparently.healthy.T2" = "black","untreated.apparently.healthy.T1" = "#EEA9B8", "untreated.apparently.healthy.T2" = "black")) +
+  scale_x_discrete(labels=c('Amoxicillin Pre-Treatment', 'Amoxicillin Post-Treatment', 'Untreated Pre-Treatment', 'Untreated Post-Treatment'))
+#you will need to adjust the annotate line individually, as I took the easy way out when coding this instead of making it work with anything
+ric #print the plot
+
+
+
+```
+
+```{r shannon diversity}
+#make a box plot with region on the x-axis, and shannon diversity on the y-axis, saved in a variable so that it can be saved later with ggsave
+shandiv <- alpha_coral %>%  mutate(Treatment.Time.Type= fct_relevel(Treatment.Time.Type, 
+           "amoxicillin.apparently.healthy.T1","amoxicillin.apparently.healthy.T2","untreated.apparently.healthy.T1","untreated.apparently.healthy.T2"))%>%ggplot(aes(Treatment.Time.Type,shannon1, fill = Treatment.Time.Type, color = Treatment.Time.Type)) + 
+  geom_boxplot() + 
+  #ggtitle("Shannon Diversity") + 
+  xlab("")+ theme_bw()+
+  ylab("Shannon Diversity") +  theme(text = element_text(size=12)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  annotate(geom="text",x=c(1,2,3,4),y=c(.75,.75,.75,.75),label=shan.letters[order(names(shan.letters))],color="red") +
+  scale_fill_manual(values=c( "amoxicillin.apparently.healthy.T1"= "white" ,"amoxicillin.apparently.healthy.T2" = "#00CDCD","untreated.apparently.healthy.T1" = "white","untreated.apparently.healthy.T2" = "#EEA9B8" ))+ scale_color_manual(values = c("amoxicillin.apparently.healthy.T1"= "#00CDCD","amoxicillin.apparently.healthy.T2" = "black","untreated.apparently.healthy.T1" = "#EEA9B8", "untreated.apparently.healthy.T2" = "black")) +
+  scale_x_discrete(labels=c('Amoxicillin Pre-Treatment', 'Amoxicillin Post-Treatment', 'Untreated Pre-Treatment', 'Untreated Post-Treatment'))
+
+shandiv #print the plot
+```
+
+
+```{r diversity metrics graph all in one}
+AH_amox_UT_Pre_Post_alpha <- ggarrange(ric, shandiv ,
+  legend = "none")
+
+AH_amox_UT_Pre_Post_alpha
+
+ggsave(filename="AH_amox_UT_Pre_Post_alpha.png", plot=AH_amox_UT_Pre_Post_alpha, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+
+
+```
+
+#26 Alpha diversity of just Amoxicillin Pre and Post Treatment 
+
+```{r}
+
+
+only.amox<- subset_samples(ps.AH.no.cont , Treatment == "amoxicillin") 
+sample_data(only.amox)
+
+asvtab<-as.matrix((data.frame(otu_table(only.amox))))#convert otu table to matrix
+samdf<-data.frame(sample_data(only.amox))#convert sample data to a dataframe
+
+data.frame(otu_table(only.amox))
+
+#richness
+rich <- specnumber(asvtab)
+length(rich)#check the length, should be the same as the number of samples
+
+#Shannon diversity
+shan.div <- vegan::diversity(asvtab,"shannon")
+
+
+
+#combine them all into one dataframe with the sample data
+alp <- cbind(rich, shan.div, samdf)
+alp <- rownames_to_column(alp, var = "id") #add the rownames as a column
+alphamets <- data.frame(alp)#back to dataframe from matrix
+alphamets
+```
+
+```{r alpha div wrapper}
+#use the function wrapper from the AlphaDiv_wrapperfuncs.R script to save yourself some time (and lines of code)
+source("AlphaDiv_wrapperfuncs.R")
+
+alpha_coral<-myalphamets(only.amox) #run the function on the full dataset and save the output
+alpha_coral #check it worked
+```
+
+
+
+# Statistics of Alpha diversity 
+
+
+```{r average and standard error of the alpha diversity metrics}
+#If you just want the mean and the standard error of one metric at a time:
+aggregate(rich1~Time.Point,FUN=mean,data=alpha_coral) #mean
+aggregate(rich1~Time.Point,FUN=function(x) sd(x)/sqrt(length(x)),data=alpha_coral) #se
+
+#now use the wrapper function to get everything at once
+alpha.summary(only.amox,sample_data(only.amox)$Time.Point) #must put in phyloseq object and then the sampledata variable that you are interested in
+```
+
+
+```{r Use anovas (analysis of variance model) to test for significant differences among groups}
+
+#### richness: #### 
+#the anova model
+mod<-aov((rich1)~Time.Point,data=alpha_coral)
+
+#test for normality using shapiro-wilks
+shapiro.test(mod$residuals) #if p<0.05, then the data is not NORMAL
+#normal
+hist(mod$residuals)
+#get anova results
+summary(mod) #
+
+#do the multiple comparison tests (tukey)
+tuk.rich<-TukeyHSD(mod)
+tuk.rich 
+
+# not statistically different 
+
+rich.letters<-multcompLetters(tuk.rich$Time.Point[, "p adj"])$Letters #save letters for plotting
+
+#### shannon: ####
+mod<-aov((shannon1)~Time.Point,data=alpha_coral) 
+shapiro.test(mod$residuals) 
+#it wasn't normal
+
+hist(mod$residuals)
+
+
+
+
+mod<-aov((shannon1)^2~Time.Point,data=alpha_coral) 
+shapiro.test(mod$residuals)
+#### this kind of worked its now slightly higher then .05 ####
+summary(mod) 
+tuk.shan<-TukeyHSD(mod)
+tuk.shan # lesion and apparently healthy are not significantly different
+shan.letters<-multcompLetters(tuk.shan$Treatment.Time[, "p adj"])$Letters
+
+
+
+
+
+```
+
+# Plotting Alpha diversity metrics 
+
+```{r richness}
+#make a box plot with region on the x-axis, and species richness on the y-axis, saved in a variable so that it can be saved later or used with patchwork
+
+sample_data(only.amox)
+ric <- alpha_coral%>% ggplot(aes(Time.Point, rich1, fill = Time.Point, color = Time.Point)) + 
+  geom_boxplot() + 
+  xlab("") +  theme_bw()+
+  theme(text = element_text(size=12))+
+  ylab("Species Richness") + 
+  #ggtitle("Richness") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + annotate("text", x = 1, y=70, label = "a", color = "red")+
+  annotate("text", x = 2, y=70, label = "a",color = "red")+ 
+  scale_fill_manual(values=c( "T1"= "white" ,"T2" = "#00CDCD"))+ scale_color_manual(values = c("T1"= "#00CDCD","T2" = "black")) +
+  scale_x_discrete(labels=c('Amoxicillin Pre-Treatment', 'Amoxicillin Post-Treatment'))
+#you will need to adjust the annotate line individually, as I took the easy way out when coding this instead of making it work with anything
+ric #print the plot
+
+# no significance 
+
+```
+
+
+
+```{r shannon diversity}
+#make a box plot with region on the x-axis, and shannon diversity on the y-axis, saved in a variable so that it can be saved later with ggsave
+shandiv <- alpha_coral%>% ggplot(aes(Time.Point, shannon1, fill = Time.Point, color = Time.Point)) + 
+  geom_boxplot() + 
+  xlab("") +  theme_bw()+
+  theme(text = element_text(size=12))+
+  ylab("Shannon Diversity") + 
+  #ggtitle("Richness") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + annotate("text", x = 1, y=0.75, label = "a", color = "red")+
+  annotate("text", x = 2, y=0.75, label = "a",color = "red")+ 
+  scale_fill_manual(values=c( "T1"= "white" ,"T2" = "#00CDCD")) + scale_color_manual(values = c("T1"= "#00CDCD","T2" = "black")) +
+  scale_x_discrete(labels=c('Amoxicillin Pre-Treatment', 'Amoxicillin Post-Treatment'))
+
+
+
+
+shandiv #print the plot
+```
+
+```{r diversity metrics graph all in one}
+AH_amox_Pre_Post_alpha <- ggarrange(ric, shandiv ,
+  legend = "none")
+
+ggsave(filename="AH_amox_Pre_Post_Alpha.png", plot=AH_amox_Pre_Post_alpha, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+
+
+```
+
+#27 Relative Abundance AH amoxicillin Pre and Post Treatment 
+- Data: only.amox - Treatement:   amox  Tissue.Type:  apparently.healthy Time.Point: Pre and Post 
+- Question:How does apparently healthy amoxicilin treated vary over time? 
+
+
+
+
+
+
+```{r}
+# merge taxa on the class level, so that there's only 1 value for each Class CHANGE HERE IF YOU WANT A DIFFERENT TAXONOMIC LEVEL
+
+
+ps.AH <- subset_samples(ps, Tissue.Type == "apparently.healthy")
+
+only.amox <- subset_samples(ps.AH, Treatment == "amoxicillin")
+sample_data(only.amox)
+
+physeq.f.glom <- tax_glom(only.amox, "Family",NArm=FALSE) 
+
+# transform data from raw abundance to relative abundance
+physeq.f.ra.glom <- transform_sample_counts(physeq.f.glom, function(x) x*100/sum(x)) 
+
+# make otu table a dataframe
+propData <- as.data.frame((otu_table(physeq.f.ra.glom))) 
+head(propData)
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #within the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+  magrittr::set_names(c("sample", "taxa", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.ra.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.ra.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Time.Point<-factor(plotDF1$Time.Point) 
+
+# ASVs were first glommed and then counts were transformed into relative abundaces. ITS2 types that made up less than 5% of a sample's relative abundance were grouped into a <5% category to simplify the visualization. 
+# get rid of those <5% 
+plotDF1[plotDF1$relab <3, ]$Family<-"<3% abundance"
+ head(plotDF1)
+plotDF1$Family<-factor(plotDF1$Family)
+
+
+
+
+```
+
+```{r}
+my.colors <-c( "<3% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "AB1"= "#ffb79d","Desertifilaceae" = "#ff7f50", "Rubritaleaceae" = "#ff931d", "Stappiaceae" = "#ff6666")
+```
+
+
+
+```{r}
+labs <- c("Pre-Treatment", "Post-Treatment")
+names(labs) <- c("T1", "T2")
+
+
+
+AH_Amox_Pre_Post<- plotDF1%>%mutate(Time.Point= fct_relevel(Time.Point, 
+            "T1", "T2"))%>%ggplot( aes(x=plotDF1$sample_ID, relab, fill=Family)) + theme_bw() + 
+  #make it a barplot with classes stacked on top of each other
+  geom_bar(stat="identity", position = "stack") + theme(axis.text.x = element_text(angle = 45,size = 15, hjust = 1)) + 
+  #set x-axis labels to be oriented vertically, and set the size of the text to 6.5
+facet_grid(~Time.Point, space="free_x",scales="free_x", drop=TRUE, labeller = labeller(Time.Point = labs)) + theme(strip.text.x = element_text(size = 15))+
+  scale_fill_manual(values = my.colors)  + 
+  #facet wrap (separate out) by Sample.Type
+  theme(legend.title = element_text(size = 15),legend.text = element_text(size = 15),legend.position = "bottom")+
+  xlab("")+
+  ylab("% Relative Abundance")+ ggtitle("") 
+
+AH_Amox_Pre_Post
+
+
+
+# changing the appearence of the faucet wrap labels 
+#facet_grid(labeller = labeller(Time.Point = labs))
+# facet_grid(~factor(Time.Point,levels = c("amoxicillin.Pre.Treatment", "amoxicillin.Post.Treatment","untreated.Pre.Treatment","untreated.Post.Treatment")
+
+ggsave(filename="AH_Amox_Pre_Post.png", plot=AH_Amox_Pre_Post, device="png", width = 35, height = 20,unit ="cm",  dpi=300)
+
+
+```
+
+#28. AH: amoxicillin and UT Pre and Post Treatment 
+- Data:  ps.AH.UT.amox- Treatement:  untreated, amox  Tissue.Type:  apparently.healthy Time.Point: Pre and Post 
+- Question:How does apparently healthy amoxicilin treated vary over time? And how does it compare with untreated after treatment?
+
+
+```{r Pre-processing for relative abundance plots}
+# merge taxa on the class level, so that there's only 1 value for each Class CHANGE HERE IF YOU WANT A DIFFERENT TAXONOMIC LEVEL
+
+ps.AH <- subset_samples(ps, Tissue.Type== "apparently.healthy" )
+
+
+ps.AH.UT.amox <- subset_samples(ps.AH, Treatment != "control" )
+sample_data(ps.AH.UT.amox)
+
+physeq.f.glom <- tax_glom(ps.AH.UT.amox, "Family",NArm=FALSE) 
+
+# transform data from raw abundance to relative abundance
+physeq.f.ra.glom <- transform_sample_counts(physeq.f.glom, function(x) x*100/sum(x)) 
+
+# make otu table a dataframe
+propData <- as.data.frame((otu_table(physeq.f.ra.glom))) 
+head(propData)
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #within the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+  magrittr::set_names(c("sample", "taxa", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.ra.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.ra.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Treatment<-factor(plotDF1$Treatment) 
+plotDF1$Time.Point<-factor(plotDF1$Time.Point) 
+
+# ASVs were first glommed and then counts were transformed into relative abundaces. ITS2 types that made up less than 5% of a sample's relative abundance were grouped into a <5% category to simplify the visualization. 
+# get rid of those <5% 
+plotDF1[plotDF1$relab <3, ]$Family<-"<3% abundance"
+ head(plotDF1)
+plotDF1$Family<-factor(plotDF1$Family)
+
+
+
+
+```
+
+
+```{r}
+# get list of colors from RColorBrewer 
+
+
+my.col <-c( 'gray83',"darkorchid4",'#CC99FF', "#584B9F","#6F196E","#340498","blue", "#324DA0", "#359DC7","#0093A8"
+            ,"turquoise"     ,"#80C3AE", "#B5D5BE",  "#E7F1D5",'navajowhite1',"#F8E399","#F0B950", "#E88600","#E47200", "#E35F15", "#CA3400","#B72E48","#FFE93F" , "#A51122")
+            
+            
+
+# set the colors to an associated taxonomic rank. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+levels(factor(plotDF1$Family))
+# Set levels so that "<5% abundance" will end up as gray instead of teal
+plotDF1$Family <- factor(plotDF1$Family, levels = c( "<3% abundance","Actinomarinaceae","Amoebophilaceae","Bacteriovoracaceae","Blastocatellaceae",   "Comamonadaceae", "Cryomorphaceae", "Cyanobiaceae", "Flavobacteriaceae",  "Fokiniaceae","NS9 marine group" ,"Pirellulaceae","Rhodobacteraceae",  "Saprospiraceae","SAR86 clade","Simkaniaceae", "Terasakiellaceae" ,   "Unclassified_ASV16" ,"Unclassified_ASV21" , "Unclassified_ASV25","Unclassified_ASV255", "Unclassified_ASV41",  "Vibrionaceae","Xenococcaceae"  ))
+# replace the names of the colors in my.colors with the levels from plotDF1$Class
+
+
+#plotDF1$Genus <- factor(plotDF1$Genus, levels = c( "<8% abundance","Class_Alphaproteobacteria","Family_Amoebophilaceae" ,"Family_Blastocatellaceae" , "Family_Flavobacteriaceae","Family_Terasakiellaceae" ,"Maritimimonas" ,  "NS5 marine group" ,   "Synechococcus CC9902", "Vibrio"   )) 
+
+names(my.col) <- levels(factor(plotDF1$Family)) 
+
+names(my.col) #confirm it worked
+
+```
+
+```{r}
+#make a plot with genotype/sample name on the x-axis, relative abundance on the y-axis, and color filled by Class. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+labs <- c("Amoxicillin Pre-Treatment", "Amoxicillin Post-Treatment", "Untreated Pre-Treatment","Untreated Post-Treatment")
+names(labs) <- c("amoxicillin.apparently.healthy.T1","amoxicillin.apparently.healthy.T2","untreated.apparently.healthy.T1","untreated.apparently.healthy.T2")
+
+
+
+
+AH_UT_Amox_Pre_Post<- plotDF1%>%mutate(Treatment.Time= fct_relevel(Treatment.Time.Type, 
+            "amoxicillin.apparently.healthy.T1", "amoxicillin.apparently.healthy.T2","untreated.apparently.healthy.T1","untreated.apparently.healthy.T2"))%>%ggplot( aes(x=plotDF1$sample_ID, relab, fill=Family)) + theme_bw() + 
+  #make it a barplot with classes stacked on top of each other
+  geom_bar(stat="identity", position = "stack") + 
+  #set x-axis labels to be oriented vertically, and set the size of the text to 6.5
+  theme(axis.text.x = element_text(angle = 45,size = 15, hjust=1)) + facet_grid(~Treatment.Time, space="free_x",scales="free_x", drop=TRUE, labeller = labeller(Treatment.Time = labs)) + theme(strip.text.x = element_text(size = 15))+
+  scale_fill_manual(values = my.col)  + 
+  #facet wrap (separate out) by Sample.Type
+  theme(legend.title = element_text(size = 15),legend.text = element_text(size = 15),legend.position = "bottom")+
+  xlab("")+
+  ylab("% Relative Abundance")+ ggtitle("") 
+
+AH_UT_Amox_Pre_Post
+
+# changing the appearence of the faucet wrap labels 
+#facet_grid(labeller = labeller(Treatment.Time = labs))
+# facet_grid(~factor(Treatment.Time,levels = c("amoxicillin.Pre.Treatment", "amoxicillin.Post.Treatment","untreated.Pre.Treatment","untreated.Post.Treatment")
+
+ggsave(filename="AH_UT_Amox_Pre_Post.png", plot=AH_UT_Amox_Pre_Post, device="png", width = 35, height = 20,unit ="cm",  dpi=300)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+#29. Calculation of Relative Abundance Percent Pre Treatment 
+```{r Calculation of Relative Abundance Percent }
+amox.Pre <- subset_samples(only.amox, Time.Point == "T1")
+sample_data(amox.Pre)
+
+## PRE TREATMENT 
+data <- tax_glom(amox.Pre, "Family") %>%
+  transform_sample_counts(function(x) 100 * x / sum(x)) %>%
+  psmelt()%>%
+  as_tibble()
+
+
+
+data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+# Now, calculate the number of samples each family is present in
+family_presence <- data %>%
+  group_by(Family) %>%
+  summarise(presence = sum(Abundance > 0))
+
+
+
+# Calculate the threshold for 10 percent of samples
+threshold <- 0.40 * n_distinct(data$Sample)
+
+# Filter for families present in at least 10 percent of the samples
+selected_families <- family_presence %>%
+  filter(presence >= threshold)
+
+# Filter the original data to retain only the selected families
+filtered_data <- data %>%
+  filter(Family %in% selected_families$Family)
+
+
+filtered_data
+
+
+amox_pre_mean <-filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+
+# Flavobacteriaceae	33.782289230			
+# Cyanobiaceae	8.989470341			
+# Terasakiellaceae	6.704407951			
+# Blastocatellaceae	3.910047717			
+# Actinomarinaceae	3.202943142	
+
+#What about vibrionacea pre treatment?
+
+selected_rows <- amox_pre_mean[grep("Vibrionaceae", amox_pre_mean$Family), ]
+# 0.07818921	
+
+#this is to get the average se (since it does the std from all of the family means)
+se_overall<-amox_pre_mean %>%
+  summarise(se_Abund = std.error(Abundance, na.rm=TRUE))
+#0.3595421	
+
+se_by_fam <-filtered_data  %>%
+  group_by(Family) %>%
+  summarise(se_of_fam_mean = std.error(Abundance, na.rm=TRUE)) 
+
+
+selected_rows <- se_by_fam[grep("Flavobacteriaceae|Cyanobiaceae|Terasakiellaceae|Blastocatellaceae|Actinomarinaceae", se_by_fam$Family), ]
+selected_rows <- se_by_fam[grep("Vibrionaceae", se_by_fam$Family), ]
+selected_rows
+
+
+# Actinomarinaceae	0.9441839			
+# Blastocatellaceae	2.3705142			
+# Cyanobiaceae	2.4035958			
+# Flavobacteriaceae	4.1724087			
+# Terasakiellaceae	3.2409263	
+
+```
+##30. Calculation of Relative Abundance Percent Post-Treatment 
+
+```{r Calculation of Relative Abundance Percent Post-Treatment}
+amox.Post <- subset_samples(only.amox, Time.Point == "T2")
+
+sample_data(amox.Post)
+data <- tax_glom(amox.Post, "Family") %>%
+  transform_sample_counts(function(x) 100 * x / sum(x)) %>%
+  psmelt()%>%
+  as_tibble()
+
+# Now, calculate the number of samples each family is present in
+family_presence <- data %>%
+  group_by(Family) %>%
+  summarise(presence = sum(Abundance > 0))
+
+# Calculate the threshold for 40 percent of samples
+threshold <- 0.40 * n_distinct(data$Sample)
+
+# Filter for families present in at least 40 percent of the samples
+selected_families <- family_presence %>%
+  filter(presence >= threshold)
+
+# Filter the original data to retain only the selected families
+filtered_data <- data %>%
+  filter(Family %in% selected_families$Family)
+
+
+
+
+amox_post_mean <- filtered_data %>%
+  group_by(Family) %>%
+  summarise(Abundance = mean(Abundance)) %>%
+  arrange(-Abundance)
+
+
+# Vibrionaceae	3.029550e+01			
+# Flavobacteriaceae	1.559410e+01			
+# Cyanobiaceae	9.469703e+00			
+# Rhodobacteraceae	6.033058e+00			
+# Comamonadaceae	3.838087e+00
+
+
+#this is to get the average se (since it does the std from all of the family means)
+se_overall<-amox_post_mean %>%
+  summarise(se_Abund = std.error(Abundance, na.rm=TRUE))
+#0.2988995		
+
+se_by_fam <-filtered_data  %>%
+  group_by(Family) %>%
+  summarise(se_of_fam_mean = std.error(Abundance, na.rm=TRUE)) 
+
+
+selected_rows <- se_by_fam[grep("Vibrionaceae|Cyanobiaceae|Flavobacteriaceae|Rhodobacteraceae|Comamonadaceae", se_by_fam$Family), ]
+
+
+
+# Comamonadaceae	1.276155			
+# Cyanobiaceae	3.108756			
+# Flavobacteriaceae	3.668283			
+# Rhodobacteraceae	3.060586			
+# Vibrionaceae	12.314907
+```
+
+
+
+# ***Lesion Tissue ***
+
+
+#31. Do the lesion samples differ from untreated to amox treated
+- Data:  ps.les - Treatement: , untreated, amox  Tissue.Type: lesion, apparently.healthy,  Time.Point: Post
+- Function: Treatment 
+
+```{r amoxicillin treated vs untreated lesion}
+ps.les<- subset_samples(ps, Tissue.Type == "lesion"  )
+
+df = as(sample_data(ps.les), "data.frame") #you need to convert it to a dataframe first
+
+#get your bray curtis distances 
+d = phyloseq::distance(ps.les, "bray") #convert counts to bray curtis distances
+
+df$Treatment <- as.factor(df$Treatment)
+
+
+
+#run the permanova by Treatment*Tissue.Type* Time.Point
+PERMANOVA<- adonis2(d ~ Treatment, blocks=df$Coral.Colony, df)
+PERMANOVA
+```
+It is not significant 
+
+#32. Lesion nmds
+
+
+```{r}
+
+
+
+sample_data(ps.les)
+
+my.col <-c("#00688B","#B03060" )
+names(my.col) <-c(" Untreated Lesion", "Amoxicillin Treated Lesion")
+
+nMds <- ordinate(ps.les, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(ps.les, nMds, color="Treatment", title="") +scale_color_manual(values=c("#00688B","#B03060"), name="Treatment",
+                       breaks=c("amoxicillin", "untreated"),
+                       labels=c("Amoxicillin Treated Lesion", "Untreated Lesion"))
+
+print(p1)
+
+p2  <- p1+
+ stat_ellipse(mapping=NULL) + theme_bw() 
+
+print(p2)
+
+
+ggsave(filename="Lesion.png", plot=p2, device="png", width = 15, height = 10, unit = "cm",  dpi=300)
+
+```
+
+
+
+#******* I need to fix this because it doesnt have t2 ect  ********
+
+#nMDS visualization of all the tissue types and and treatments Post-Treatment
+
+```{r nMDS to visuals}
+#changing the sample data sheet back to the one I was using origninally so that control will be included with the apparently healthy tissue type (so its not just healthy tissue off to one side really awkwaward )
+
+new_sample_data <- read.csv("Copy of STX sample list June 2020_modified_APL_Jan_15.csv", row.names = 1)
+sample_data(ps) <- new_sample_data
+
+Post.Treatment <- subset_samples(ps, Time.Point == "T2") 
+
+
+sample_data(Post.Treatment )
+
+
+my.col <-c("#00688B","#B03060" , "#00CDCD", "#EEA9B8",  "darkgrey" )
+names(my.col) <-c("Amoxicillin Treated Lesion", " Untreated Lesion", "Amoxicillin Treated Apparently Healthy", "Untreated Apparently Healthy", "Healthy Control")
+
+
+nMds <- ordinate(Post.Treatment, "NMDS", "bray", autotransform = FALSE, parallel = 48, trymax = 10^4, maxit = 10^4)
+p1 = plot_ordination(Post.Treatment , nMds, color="Sample.Type", title="")+geom_point( shape =19)  +scale_color_manual(values=c("#00688B","#B03060" , "#00CDCD", "#EEA9B8",  "darkgrey"), name="Treatment",
+                       breaks=c("amoxicillin.lesion", "untreated.lesion","amoxicillin.apparently.healthy", "untreated.apparently.healthy", "control.healthy" ),
+                       labels=c("Amoxicillin Treated Lesion", " Untreated Lesion", "Amoxicillin Treated Apparently Healthy", "Untreated Apparently Healthy", "Healthy Control"))
+
+
+
+print(p1)
+
+p2 <- p1+
+ stat_ellipse(mapping=NULL) + theme_bw()
+
+print(p2)
+ggsave(filename="Post_Treatment_Amoxicillin_vs_Untreated_All_Tissue_no_faucet.png", plot=p2, device="png", width = 20, height = 10, units="cm", dpi=300)
+```
+
+
+#33. Alpha diversity of the Lesion Tissue 
+
+
+```{r calculating alpha diversity metrics}
+#get data into correct format for calculation
+ps.Post.Treatment <-subset_samples(ps, Time.Point == "T2")
+
+les  <-subset_samples(ps.Post.Treatment, Tissue.Type == "lesion")
+sample_data(ps.Post.Treatment)
+
+asvtab<-as.matrix((data.frame(otu_table(les))))#convert otu table to matrix
+samdf<-data.frame(sample_data(les))#convert sample data to a dataframe
+
+data.frame(otu_table(les))
+
+#richness
+rich <- specnumber(asvtab)
+length(rich)#check the length, should be the same as the number of samples
+
+#Shannon diversity
+shan.div <- vegan::diversity(asvtab,"shannon")
+
+
+
+#combine them all into one dataframe with the sample data
+alp <- cbind(rich, shan.div, samdf)
+alp <- rownames_to_column(alp, var = "id") #add the rownames as a column
+alphamets <- data.frame(alp)#back to dataframe from matrix
+alphamets
+```
+
+```{r alpha div wrapper}
+#use the function wrapper from the AlphaDiv_wrapperfuncs.R script to save yourself some time (and lines of code)
+source("AlphaDiv_wrapperfuncs.R")
+
+alpha_coral<-myalphamets(les) #run the function on the full dataset and save the output
+alpha_coral #check it worked
+```
+
+
+# Statistics of Alpha diversity 
+
+
+```{r average and standard error of the alpha diversity metrics}
+#If you just want the mean and the standard error of one metric at a time:
+aggregate(rich1~Treatment,FUN=mean,data=alpha_coral) #mean
+aggregate(rich1~Treatment,FUN=function(x) sd(x)/sqrt(length(x)),data=alpha_coral) #se
+
+#now use the wrapper function to get everything at once
+alpha.summary(les,sample_data(les)$Treatment) #must put in phyloseq object and then the sampledata variable that you are interested in
+```
+
+
+```{r Use anovas (analysis of variance model) to test for significant differences among groups}
+
+#### richness: #### 
+#the anova model
+mod<-aov((rich1)~Treatment,data=alpha_coral)
+
+#test for normality using shapiro-wilks
+shapiro.test(mod$residuals) #if p<0.05, then the data is not NORMAL
+#normal
+hist(mod$residuals)
+#get anova results
+summary(mod) #
+
+#do the multiple comparison tests (tukey)
+tuk.rich<-TukeyHSD(mod)
+tuk.rich 
+
+
+#### shannon: ####
+mod<-aov((shannon1)~Treatment,data=alpha_coral) 
+shapiro.test(mod$residuals) 
+# normal
+
+hist(mod$residuals)
+
+summary(mod) 
+tuk.shan<-TukeyHSD(mod)
+tuk.shan # lesion and apparently healthy are not significantly different
+
+
+
+```
+
+
+
+# Plotting Alpha diversity metrics 
+
+
+```{r richness}
+#make a box plot with region on the x-axis, and species richness on the y-axis, saved in a variable so that it can be saved later or used with patchwork
+
+
+ric <- alpha_coral %>% mutate(Treatment= fct_relevel(Treatment, 
+            "amoxicillin", "untreated"))%>%ggplot(aes(Treatment,rich1,fill = Treatment, color = Treatment)) + 
+  geom_boxplot() + theme_bw()+
+  xlab("") +  
+  theme(text = element_text(size=12))+
+  ylab("Species Richness") + 
+  #ggtitle("Richness") + 
+  theme(axis.text.x = element_text(angle = 45, hjust =1))+
+  annotate(geom="text",x=c(1,2),y=c(40,40),label="a" ,color="red") +
+  scale_fill_manual(values=c( "amoxicillin"= "#00688B" ,"untreated" = "#B03060" ))+ scale_color_manual(values = c("amoxicillin"= "black" ,"untreated" = "black" ))+
+  scale_x_discrete(labels=c('Amoxicillin ', 'Untreated'))
+
+#you will need to adjust the annotate line individually, as I took the easy way out when coding this instead of making it work with anything
+ric #print the plot
+
+
+
+
+
+
+ 
+
+
+```
+
+
+
+```{r shannon diversity}
+#make a box plot with region on the x-axis, and shannon diversity on the y-axis, saved in a variable so that it can be saved later with ggsave
+shandiv <- alpha_coral %>% mutate(Treatment= fct_relevel(Treatment, 
+            "amoxicillin", "untreated"))%>%ggplot(aes(Treatment,shannon1,fill = Treatment, color = Treatment)) + 
+  geom_boxplot() + theme_bw() + 
+  xlab("") +  
+  theme(text = element_text(size=12))+
+  ylab("Shannon Diversity") + 
+  theme(axis.text.x = element_text(angle = 45, hjust =1))+
+  annotate(geom="text",x=c(1,2),y=c(.75,.75),label="a",color="red") +
+  scale_fill_manual(values=c( "amoxicillin"= "#00688B" ,"untreated" = "#B03060" ))+ scale_color_manual(values = c("amoxicillin"= "black" ,"untreated" = "black" ))+
+  scale_x_discrete(labels=c('Amoxicillin ', 'Untreated'))
+
+
+ 
+
+
+shandiv #print the plot
+```
+
+
+
+```{r diversity metrics graph all in one}
+ lesion_alpha <-ggarrange(ric, shandiv ,legend = "none")
+
+ 
+ lesion_alpha
+ 
+ ggsave(filename="Lesion_alpha.png", plot= lesion_alpha, device="png", width = 20, height = 10, unit = "cm", dpi=300)
+
+```
+
+
+
+#34. Lesion Relative abundance untreated vs treated 
+
+
+
+- Data:  ps.les - Treatement:  untreated, amox  Tissue.Type: lesion Time.Point: T2
+- Question:How untreated vs amoxiillin treated lesion compare 
+
+
+
+```{r Pre-processing for relative abundance plots}
+# merge taxa on the class level, so that there's only 1 value for each Class CHANGE HERE IF YOU WANT A DIFFERENT TAXONOMIC LEVEL
+ps.les <- subset_samples(ps, Tissue.Type == "lesion")
+
+physeq.f.glom <- tax_glom(ps.les, "Family",NArm=FALSE) 
+view(sample_data(ps.les))
+
+# transform data from raw abundance to relative abundance
+physeq.f.ra.glom <- transform_sample_counts(physeq.f.glom, function(x) x*100/sum(x)) 
+
+# make otu table a dataframe
+propData <- as.data.frame((otu_table(physeq.f.ra.glom))) 
+head(propData)
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #w ithin the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+  magrittr::set_names(c("sample", "taxa", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.ra.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.ra.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Treatment<-factor(plotDF1$Treatment) 
+
+# ASVs were first glommed and then counts were transformed into relative abundaces. ITS2 types that made up less than 5% of a sample's relative abundance were grouped into a <5% category to simplify the visualization. 
+# get rid of those <5% 
+plotDF1[plotDF1$relab <3, ]$Family<-"<3% abundance"
+ head(plotDF1)
+plotDF1$Family<-factor(plotDF1$Family) 
+
+
+
+```
+
+
+
+```{r}
+# get list of colors from RColorBrewer 
+
+
+
+# set the colors to an associated taxonomic rank. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+levels(factor(plotDF1$Family))
+
+my.colors <-c( "<3% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Cyclobacteriaceae" ="#CD6E94", "Flavobacteriaceae"= "#359DC7", "DEV007" = "#FFC5D9",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "Halomonadaceae"= "#F36D60"  )
+
+
+
+```
+```{r}
+#make a plot with genotype/sample name on the x-axis, relative abundance on the y-axis, and color filled by Class. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+
+labs <- c("Amoxicillin", "Untreated")
+names(labs) <- c("amoxicillin", "untreated")
+
+Lesion <- ggplot(plotDF1, aes(x=plotDF1$sample_ID, relab, fill=Family)) +  
+  #make it a barplot with classes stacked on top of each other
+  geom_bar(stat="identity", position = "stack") + theme_bw()+
+  #set x-axis labels to be oriented vertically, and set the size of the text to 6.5
+  theme(axis.text.x = element_text(angle = 45,size = 17, hjust= 1)) + 
+  #set the colors being filled in by class to the mycolors variable made earlier
+  scale_fill_manual(values = my.colors,limits = levels(plotDF1$Genus)) + 
+  #facet wrap (separate out) by Sample.Type
+  facet_grid(~Treatment,space="free_x",scales="free_x",drop=TRUE, labeller = labeller(Treatment = labs)) + theme(strip.text.x = element_text(size = 22)) +
+  theme(legend.title = element_text(size = 21),legend.text = element_text(size = 21),legend.position = "bottom")+
+  xlab("")+
+  ylab("% Relative Abundance")+theme(axis.title=element_text(size=20),
+        axis.text=element_text(size=22))+ ggtitle("")
+#
+
+Lesion 
+ggsave(filename="Lesion_rel_abund.png", plot=Lesion, device="png", width = 40, height = 20,unit ="cm",  dpi=300)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+#35. Lesion Progression Data 
+
+```{r Progress rate (cm/month)}
+# This csv has some deletions to make the data set pairwise. Four untreated replicates 
+prog.bar <- read.csv("CYBD_progression_rates_barplot_pairwise.csv")
+
+View(prog.bar)
+
+prog.bar.df <- as.data.frame(prog.bar)
+(prog.bar.df)
+
+amox_ut_df <- prog.bar.df 
+
+
+#This is the average disease progression RATE in cm/month
+
+cm.month.df<- ddply(amox_ut_df, c( "Treatment"), summarise,
+               N    = sum((!is.na (Progress.rate.cm.month))),
+               mean = mean(Progress.rate.cm.month, na.rm=TRUE),
+               sd   = sd(Progress.rate.cm.month, na.rm=TRUE),
+               se   = sd / sqrt(N))
+
+
+cm.month.df
+
+
+ave_prog_amox_ut<-ggplot(cm.month.df,aes(x=Treatment,y=mean,fill=Treatment, label=mean))+ geom_bar(stat="identity")+
+   geom_errorbar(aes(ymin=mean-se,ymax=mean+se),width=0.25,
+                 size=0.5,position= position_dodge(0.9), alpha=0.8) +
+  scale_fill_manual(values = c( "#00688B", "#B03060"))+
+  theme_bw() + labs(y= "Average CYBD Lesion Progression Rate (cm/month)")+scale_x_discrete(labels=c( 'Amoxicillin', 'Untreated'))+ theme(legend.position="none") 
+ 
+ 
+ave_prog_amox_ut
+
+ggsave(filename="Ave_Progress_Amox_UT.png", plot=ave_prog_amox_ut, device="png", unit = "cm", width = 20, height = 10, dpi=300)
+
+
+```
+
+
+
+#Stats for Lesion Progression
+```{r T test for amoxicllin colonies}
+
+
+amox_ut_df <- prog.bar.df 
+view(amox_ut_df)
+
+amox_ut_df$Treatment<- as.factor(amox_ut_df$Treatment)
+
+shapiro.test(subset(amox_ut_df, Treatment.association == "amoxicillin")$Progress.rate.cm.month)
+#normal
+shapiro.test(subset(amox_ut_df, Treatment.association == "untreated.amox.col")$Progress.rate.cm.month)
+#normal
+
+#one tailed paired t test!
+#https://peerj.com/articles/4800/#materials|methods this paper used this test for testing shaded or unshaded on the same colonies 
+
+
+
+
+
+ stats <- ddply(amox_ut_df, c( "Treatment"), summarise,
+               N    = sum((!is.na (Progress.rate.cm.month))),
+               mean = mean(Progress.rate.cm.month, na.rm=TRUE),
+               sd   = sd(Progress.rate.cm.month, na.rm=TRUE),
+               se   = sd / sqrt(N))
+ 
+differences <- with(amox_ut_df, Progress.rate.cm.month[Treatment == "amoxicillin"] - Progress.rate.cm.month[Treatment == "untreated"])
+
+#perform shapiro-wilk test for normality on this vector of values
+shapiro.test(differences)
+
+#normal
+
+
+# This is to relevel so I know that my controls are being treated as controls
+amox_ut_df$Treatment <- relevel(amox_ut_df$Treatment, ref = "untreated")
+
+# I needed to do a pairwise deletion of missing values in order to use this test. I had to delete 3 values that were missing in the untreated data set two for D7 and one for colony D8.
+
+#This is two sided 
+t.test(Progress.rate.cm.month ~ Treatment, data = amox_ut_df, paired = TRUE )
+
+# data:  Progress.rate.cm.month by Treatment
+# t = 0.66647, df = 11, p-value = 0.5188
+# alternative hypothesis: true mean difference is not equal to 0
+# 95 percent confidence interval:
+#  -0.1694847  0.3167069
+# sample estimates:
+# mean difference 
+#      0.07361111 
+
+
+#one sided t test to see if treatment with amoxicillin resulted in a lower growth of lesions 
+  t.test(Progress.rate.cm.month ~ Treatment, data = amox_ut_df, paired = TRUE, alternative = "less" )
+
+
+# Paired t-test
+# 
+# data:  Progress.rate.cm.month by Treatment
+# t = 0.66647, df = 11, p-value = 0.7406
+# alternative hypothesis: true mean difference is less than 0
+# 95 percent confidence interval:
+#       -Inf 0.2719641
+# sample estimates:
+# mean difference 
+#      0.07361111
+
+
+```
+#Differiential Abundance Bubble plots (both TT and Amox Data Sets)
+```{r}
+ps <- readRDS("Thesis_filt_Jan_15_Phyloseq.rds")
+ps
+
+tax.clean<-data.frame(tax_table(ps))
+tax.clean[is.na(tax.clean)] <- ""
+### this loop changes blanks to Unclassified_ASV#  
+for (i in 1:nrow(tax.clean)){
+  if (tax.clean[i,2] == ""){
+    kingdom <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+    tax.clean[i, 2:7] <- kingdom
+    } else if (tax.clean[i,3] == ""){
+      phylum <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 3:7] <- phylum
+    } else if (tax.clean[i,4] == ""){
+      class <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 4:7] <- class
+    } else if (tax.clean[i,5] == ""){
+      order <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 5:7] <- order
+    } else if (tax.clean[i,6] == ""){
+      family <- paste("Unclassified_", row.names(tax.clean)[i], sep = "")
+      tax.clean[i, 6:7] <- family
+    } else if (tax.clean[i,7] == ""){
+      tax.clean$Species[i] <- paste("Unclassified_",row.names(tax.clean)[i], sep = "")
+    }
+}
+head(tax.clean)
+taxonomy2<-as.matrix(tax.clean)
+# add taxonomy to ps
+tax_table(ps)<-taxonomy2
+
+```
+
+
+
+#36 Quartile analysis 
+
+```{r}
+# finding the counts per ASV in the dataset 
+taxa_counts <-taxa_sums(ps
+                        )
+
+
+# Find the bottom quartile value
+bottom_quartile <- quantile(taxa_counts, probs = 0.25)
+
+# Print the bottom quartile value
+print(paste("Bottom Quartile Value:", bottom_quartile))
+
+#this value is 44 
+
+# boxplot
+boxplot(taxa_counts)
+
+# Convert taxa_counts to a data frame
+df <- data.frame(ASV = names(taxa_counts), Count = taxa_counts)
+
+# Calculate bottom quartile
+bottom_quartile <- quantile(df$Count, probs = 0.25)
+
+
+#next adding the 44 counts to each 
+
+ps.addedcounts <- transform_sample_counts(ps, function(x) x+44)
+
+# Now to run my corncob with this new pseudocount 
+
+```
+
+
+```{r TT subset data set subsets }
+
+pseudo.post<- subset_samples(ps.addedcounts, Time.Point == "T2")
+pseudo.TT<-subset_samples(pseudo.post, Sample.Type == "untreated.apparently.healthy"|  Sample.Type == "control.healthy"|  Sample.Type == "untreated.lesion")
+ view(sample_data(pseudo.TT))
+
+```
+
+```{r TT Top 100 most abundant}
+# relative abundnace 
+ps.ra.TT <- transform_sample_counts(pseudo.TT, function(x) x*100/sum(x))
+otu_table(ps.ra.TT )
+
+top_taxa <- names(sort(taxa_sums(ps.ra.TT), decreasing = TRUE)[1:100]) 
+
+# taking the 100 highest abundant taxa out of the original TT phylsoeq so I have the regular counts + pseudo counts added to everything and not relative abundance 
+ps_100_TT<- prune_taxa(top_taxa, pseudo.TT)
+# only the top 100 taxa 
+
+View(sample_data(ps_100_TT))
+View(otu_table(ps_100_TT))
+
+
+
+```
+
+#37. Tissue Type Corncobs
+
+
+## 37a Apparently healthy vs Healthy Control 
+```{r}
+#subset 
+Healthy_v_AH <- subset_samples(ps_100_TT, Tissue.Type != "lesion")
+View(sample_data(Healthy_v_AH))
+```
+
+
+```{r}
+
+
+  
+da_analysis_Healthy_AH<-differentialTest(formula = ~Sample.Type,
+                              phi.formula = ~Sample.Type,
+                              formula_null = ~1,
+                              data = Healthy_v_AH,
+                              phi.formula_null = ~1,
+                              test="Wald",
+                              boot=FALSE,
+                              fdr_cutoff = 0.05)
+
+da_analysis_Healthy_AH$significant_taxa
+
+# [1] "ASV2"   "ASV6"   "ASV7"   "ASV8"   "ASV9"   "ASV10"  "ASV12"  "ASV14"  "ASV15"  "ASV25"  "ASV26"  "ASV27"  "ASV28" 
+# [14] "ASV29"  "ASV31"  "ASV32"  "ASV34"  "ASV35"  "ASV36"  "ASV37"  "ASV40"  "ASV44"  "ASV49"  "ASV50"  "ASV58"  "ASV60" 
+# [27] "ASV66"  "ASV69"  "ASV71"  "ASV72"  "ASV74"  "ASV75"  "ASV83"  "ASV84"  "ASV91"  "ASV98"  "ASV106" "ASV138" "ASV164"
+# [40] "ASV208" "ASV255" "ASV259" "ASV286"
+ 
+```
+
+
+
+```{r}
+#from Becker et al 2022 
+#Write a function to extract the significant taxa and put it in a dataframe with a for loop so you can rearrange the levels of the taxa to make a nice ordered graph. 
+
+sigtaxto_df <- function(daout, psobj) {#2 or 3
+  df.out <- c()
+  for (i in 1:length(daout$significant_models)) { #from 1 to the number of significant taxa
+  df.out = rbind(df.out, daout$significant_models[[i]]$coefficients[2, 1:4])
+  #bind the sig.mcav row with coefficient, std. error, t value, Pr thing. coefficients[2,] is the DA model output.
+  }
+  asv = as.vector(daout$significant_taxa) #get significant ASVs
+  Class = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Class"))) #isolate class of significant Asvs
+  Order = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Order"))) #isolate order of significant ASVs
+  Family = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Family"))) #isolate family of significant ASVs
+  Family.fix = ifelse(Family == "", "unclassified", Family) #replace empty values with "unclassified"
+  Genus = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Genus"))) #isolate Genus of singnificant ASVs
+  Genus.fix = ifelse(Genus == "", "unclassified", Genus) #replace empty values with "unclassified"
+  
+  df.bind <- as.data.frame(cbind(df.out, asv, Class, Order, Family.fix, Genus.fix)) #bind taxonomic info together, making sure to use the vectors with "unclassified"
+  df.bind$asvgenus <- paste0(df.bind$Family.fix, " (", df.bind$asv, ")") #make a concatenated column of ASV and Genus.
+  colnames(df.bind) <- c("Estimate", "StdError", "tvalue", "Pr", "asv", "Class", "Order", "Family", "Genus", "asvtaxa")
+  df.bind$Estimate = as.numeric(as.character(df.bind$Estimate)) #estimate column should be numeric 
+  df.bind$StdError = as.numeric(as.character(df.bind$StdError)) #stderror column should be numeric 
+  
+  return(df.bind)
+}
+
+
+```
+
+#Visual Representation of which differentially abundant taxa are significant 
+```{r}
+dlabsigtax<-sigtaxto_df(da_analysis_Healthy_AH, Healthy_v_AH)
+dlabsigtax$asvtaxa <- factor(dlabsigtax$asvtaxa, levels = as.vector(dlabsigtax$asvtaxa))
+dlabsigtax$Family
+
+
+
+
+my.colors <-c( "<0.5% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "Balneolaceae" = "#ff748c", "Cellvibrionaceae" = "#ffc0eb", "Clostridiaceae"= "#ffa7b6", "Coxiellaceae"= "orange", "Cyclobacteriaceae"= "black", "Halieaceae" = "lightpink","Microtrichaceae"= "lightblue", "Micrococcaceae"= "white", "Moritellaceae" = "darkgrey", "Neisseriaceae" = "violet", "NS7 marine group"= "lightgreen" , "Phycisphaeraceae" = "skyblue", "Sandaracinaceae" = "navyblue", "Stappiaceae"= "maroon")
+
+
+
+
+
+dif_AH_H<-ggplot(dlabsigtax, aes(x = asvtaxa, y = Estimate, fill = Family)) +
+  geom_errorbar(aes(ymin = Estimate-StdError, ymax = Estimate+StdError), color = "black", width = .3, position=position_dodge(.9)) +
+  geom_point(size = 2.5, pch = 21) + 
+  scale_x_discrete(limits = rev(levels(dlabsigtax$asvtaxa))) +
+  scale_fill_manual(values = my.colors) +
+  coord_flip() +
+  theme_bw() +
+  labs(x = " ", y = "Coefficient")+
+  theme(legend.position = "none",axis.text.x=element_text(size=9),axis.text.y=element_text(size=9)) +ggtitle("Healthy Control vs Apparently Healthy")
+
+dif_AH_H
+asvtaxa
+
+ggsave(filename="DA_H_AH_pseudo_44_top100.png", plot=dif_AH_H, device="png",width = 35, height = 20,unit ="cm",  dpi=300)
+
+```
+
+
+##37b Lesion vs Healthy Control 
+
+```{r}
+
+
+Healthy_v_L <- subset_samples(ps_100_TT, Sample.Type != "untreated.apparently.healthy")
+View(sample_data(Healthy_v_L))
+```
+
+
+```{r}
+
+ 
+
+da_analysis_TT_H_L<-differentialTest(formula = ~Sample.Type,
+                              phi.formula = ~Sample.Type,
+                              formula_null = ~1,
+                              data = Healthy_v_L,
+                              phi.formula_null = ~1,
+                              test="Wald",
+                              boot=FALSE,
+                              fdr_cutoff = 0.05)
+
+
+da_analysis_TT_H_L$significant_taxa
+# 
+# [1] "ASV2"   "ASV3"   "ASV8"   "ASV9"   "ASV10"  "ASV12"  "ASV14"  "ASV15"  "ASV17"  "ASV20"  "ASV26"  "ASV27"  "ASV28" 
+# [14] "ASV29"  "ASV31"  "ASV33"  "ASV34"  "ASV35"  "ASV39"  "ASV41"  "ASV44"  "ASV49"  "ASV50"  "ASV55"  "ASV57"  "ASV68" 
+# [27] "ASV83"  "ASV86"  "ASV91"  "ASV98"  "ASV100" "ASV102" "ASV103" "ASV106" "ASV116" "ASV164" "ASV177" "ASV185" "ASV208"
+# [40] "ASV259" "ASV286"
+```
+
+
+
+
+```{r}
+#from Becker et al 2022 
+#Write a function to extract the significant taxa and put it in a dataframe with a for loop so you can rearrange the levels of the taxa to make a nice ordered graph. 
+
+sigtaxto_df <- function(daout, psobj) {#2 or 3
+  df.out <- c()
+  for (i in 1:length(daout$significant_models)) { #from 1 to the number of significant taxa
+  df.out = rbind(df.out, daout$significant_models[[i]]$coefficients[2, 1:4])
+  #bind the sig.mcav row with coefficient, std. error, t value, Pr thing. coefficients[2,] is the DA model output.
+  }
+  asv = as.vector(daout$significant_taxa) #get significant ASVs
+  Class = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Class"))) #isolate class of significant Asvs
+  Order = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Order"))) #isolate order of significant ASVs
+  Family = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Family"))) #isolate family of significant ASVs
+  Family.fix = ifelse(Family == "", "unclassified", Family) #replace empty values with "unclassified"
+  Genus = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Genus"))) #isolate Genus of singnificant ASVs
+  Genus.fix = ifelse(Genus == "", "unclassified", Genus) #replace empty values with "unclassified"
+  
+  df.bind <- as.data.frame(cbind(df.out, asv, Class, Order, Family.fix, Genus.fix)) #bind taxonomic info together, making sure to use the vectors with "unclassified"
+  df.bind$asvgenus <- paste0(df.bind$Family.fix, " (", df.bind$asv, ")") #make a concatenated column of ASV and Genus.
+  colnames(df.bind) <- c("Estimate", "StdError", "tvalue", "Pr", "asv", "Class", "Order", "Family", "Genus", "asvtaxa")
+  df.bind$Estimate = as.numeric(as.character(df.bind$Estimate)) #estimate column should be numeric 
+  df.bind$StdError = as.numeric(as.character(df.bind$StdError)) #stderror column should be numeric 
+  
+  return(df.bind)
+}
+
+
+
+
+
+```
+
+
+```{r}
+dlabsigtax<-sigtaxto_df(da_analysis_TT_H_L, Healthy_v_L)
+dlabsigtax$asvtaxa <- factor(dlabsigtax$asvtaxa, levels = as.vector(dlabsigtax$asvtaxa))
+dlabsigtax$Family
+
+
+
+
+my.colors <-c( "<0.5% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "Balneolaceae" = "#ff748c", "Cellvibrionaceae" = "#ffc0eb", "Clostridiaceae"= "#ffa7b6", "Coxiellaceae"= "orange", "Cyclobacteriaceae"= "black", "Halieaceae" = "lightpink","Microtrichaceae"= "lightblue", "Micrococcaceae"= "white", "Moritellaceae" = "darkgrey", "Neisseriaceae" = "violet", "NS7 marine group"= "lightgreen" , "Phycisphaeraceae" = "skyblue", "Sandaracinaceae" = "navyblue", "Stappiaceae"= "maroon")
+
+
+
+
+
+dif_L_H<-ggplot(dlabsigtax, aes(x = asvtaxa, y = Estimate, fill = Family)) +
+  geom_errorbar(aes(ymin = Estimate-StdError, ymax = Estimate+StdError), color = "black", width = .3, position=position_dodge(.9)) +
+  geom_point(size = 2.5, pch = 21) + 
+  scale_x_discrete(limits = rev(levels(dlabsigtax$asvtaxa))) +
+  scale_fill_manual(values = my.colors) +
+  coord_flip() +
+  theme_bw() +
+  labs(x = " ", y = "Coefficient")+
+  theme(legend.position = "none",axis.text.x=element_text(size=9),axis.text.y=element_text(size=9)) +ggtitle("Healthy Control vs Lesion")
+
+dif_L_H
+asvtaxa
+
+ggsave(filename="DA_H_L_pseudo_44_top100.png", plot=dif_L_H, device="png",width = 35, height = 20,unit ="cm",  dpi=300)
+
+```
+
+##37c Apparently Healthy vs Lesion 
+
+```{r}
+AH_v_L <- subset_samples(ps_100_TT, Sample.Type != "control.healthy")
+View(sample_data(AH_v_L))
+```
+
+
+```{r}
+
+
+
+da_analysis_AH_H_L<-differentialTest(formula = ~Sample.Type,
+                              phi.formula = ~Sample.Type,
+                              formula_null = ~1,
+                              data = AH_v_L,
+                              phi.formula_null = ~1,
+                              test="Wald",
+                              boot=FALSE,
+                              fdr_cutoff = 0.05)
+
+
+da_analysis_AH_H_L$significant_taxa
+# [1] "ASV8"   "ASV14"  "ASV17"  "ASV37"  "ASV40"  "ASV55"  "ASV57"  "ASV66"  "ASV67"  "ASV68"  "ASV72"  "ASV75"  "ASV83" 
+# [14] "ASV86"  "ASV87"  "ASV102" "ASV103" "ASV116" "ASV134" "ASV137" "ASV141" "ASV150" "ASV160" "ASV177" "ASV185" "ASV238"
+# [27] "ASV255" "ASV298" "ASV343"
+```
+
+
+```{r}
+#from Becker et al 2022 
+#Write a function to extract the significant taxa and put it in a dataframe with a for loop so you can rearrange the levels of the taxa to make a nice ordered graph. 
+
+sigtaxto_df <- function(daout, psobj) {#2 or 3
+  df.out <- c()
+  for (i in 1:length(daout$significant_models)) { #from 1 to the number of significant taxa
+  df.out = rbind(df.out, daout$significant_models[[i]]$coefficients[2, 1:4])
+  #bind the sig.mcav row with coefficient, std. error, t value, Pr thing. coefficients[2,] is the DA model output.
+  }
+  asv = as.vector(daout$significant_taxa) #get significant ASVs
+  Class = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Class"))) #isolate class of significant Asvs
+  Order = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Order"))) #isolate order of significant ASVs
+  Family = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Family"))) #isolate family of significant ASVs
+  Family.fix = ifelse(Family == "", "unclassified", Family) #replace empty values with "unclassified"
+  Genus = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Genus"))) #isolate Genus of singnificant ASVs
+  Genus.fix = ifelse(Genus == "", "unclassified", Genus) #replace empty values with "unclassified"
+  
+  df.bind <- as.data.frame(cbind(df.out, asv, Class, Order, Family.fix, Genus.fix)) #bind taxonomic info together, making sure to use the vectors with "unclassified"
+  df.bind$asvgenus <- paste0(df.bind$Family.fix, " (", df.bind$asv, ")") #make a concatenated column of ASV and Genus.
+  colnames(df.bind) <- c("Estimate", "StdError", "tvalue", "Pr", "asv", "Class", "Order", "Family", "Genus", "asvtaxa")
+  df.bind$Estimate = as.numeric(as.character(df.bind$Estimate)) #estimate column should be numeric 
+  df.bind$StdError = as.numeric(as.character(df.bind$StdError)) #stderror column should be numeric 
+  
+  return(df.bind)
+}
+
+
+
+
+
+```
+
+
+```{r}
+dlabsigtax<-sigtaxto_df(da_analysis_AH_H_L, AH_v_L)
+dlabsigtax$asvtaxa <- factor(dlabsigtax$asvtaxa, levels = as.vector(dlabsigtax$asvtaxa))
+dlabsigtax$Family
+
+
+
+
+my.colors <-c( "<0.5% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "Balneolaceae" = "#ff748c", "Cellvibrionaceae" = "#ffc0eb", "Clostridiaceae"= "#ffa7b6", "Coxiellaceae"= "orange", "Cyclobacteriaceae"= "black", "Halieaceae" = "lightpink","Microtrichaceae"= "lightblue", "Micrococcaceae"= "white", "Moritellaceae" = "darkgrey", "Neisseriaceae" = "violet", "NS7 marine group"= "lightgreen" , "Phycisphaeraceae" = "skyblue", "Sandaracinaceae" = "navyblue", "Stappiaceae"= "maroon")
+
+
+
+
+
+dif_L_AH<-ggplot(dlabsigtax, aes(x = asvtaxa, y = Estimate, fill = Family)) +
+  geom_errorbar(aes(ymin = Estimate-StdError, ymax = Estimate+StdError), color = "black", width = .3, position=position_dodge(.9)) +
+  geom_point(size = 2.5, pch = 21) + 
+  scale_x_discrete(limits = rev(levels(dlabsigtax$asvtaxa))) +
+  scale_fill_manual(values = my.colors) +
+  coord_flip() +
+  theme_bw() +
+  labs(x = " ", y = "Coefficient")+
+  theme(legend.position = "none",axis.text.x=element_text(size=9),axis.text.y=element_text(size=9)) +ggtitle("Apparently Healthy vs Lesion")
+
+dif_L_AH
+asvtaxa
+
+ggsave(filename="DA_AH_L_pseudo_44_top100.png", plot=dif_L_AH, device="png",width = 35, height = 20,unit ="cm",  dpi=300)
+
+```
+
+
+
+
+#38 TT bubbleplot
+``` {r Tissue Type FAMILY bubbleplot }
+# no pseudo counts 
+
+#no pseudo counts for plotting with the bubble plot 
+post<- subset_samples(ps, Time.Point == "T2")
+TT<-subset_samples(post, Sample.Type == "untreated.apparently.healthy"|  Sample.Type == "control.healthy"|  Sample.Type == "untreated.lesion")
+
+
+ view(sample_data(TT))
+
+levels(as.factor(sample_data(TT)$Sample.Type))
+
+physeq.f<-merge_samples(TT,"Sample.Type", fun = mean)
+
+
+sample_data(physeq.f)
+otu_table(physeq.f)
+
+physeq.f.ra <- transform_sample_counts(physeq.f, function(x) x*100/sum(x))
+
+
+
+# Extract OTU table
+otu_table <- t(otu_table(physeq.f.ra ))  # Transpose the OTU table
+
+# Extract taxonomy table
+tax_table <- tax_table(physeq.f.ra )
+
+# Find the ASVs you want to extract (replace ASV_ID_1, ASV_ID_2, etc. with the actual ASV identifiers)
+asv_ids_to_extract <- c("ASV9","ASV12", "ASV14", "ASV15","ASV27","ASV50","ASV91", "ASV98", "ASV106","ASV164",
+"ASV208","ASV286","ASV2","ASV6", "ASV7", "ASV8", "ASV10","ASV17","ASV3",  "ASV20", "ASV25", "ASV26",  "ASV28", "ASV29", "ASV31", "ASV32", "ASV33", "ASV34", "ASV35", "ASV36", "ASV37", "ASV39", "ASV40", "ASV41", "ASV44", "ASV49",  "ASV55", "ASV57", "ASV58", "ASV60", "ASV66", "ASV67", "ASV68", "ASV69", "ASV71", "ASV72", "ASV74", "ASV75", "ASV83", "ASV84", "ASV86", "ASV87", "ASV100", "ASV102", "ASV103",  "ASV116", "ASV134", "ASV137", "ASV138", "ASV141", "ASV150", "ASV160",  "ASV177", "ASV185",  "ASV238", "ASV255", "ASV259",  "ASV298", "ASV343")
+
+# Find the row numbers (indexes) of the ASVs you want to extract
+asv_indexes <- match(asv_ids_to_extract, rownames(otu_table))
+
+# Check for NA values (ASV IDs not found in the OTU table)
+if (any(is.na(asv_indexes))) {
+  not_found_asvs <- asv_ids_to_extract[is.na(asv_indexes)]
+  stop(paste("ASV IDs not found in the OTU table:", paste(not_found_asvs, collapse = ", ")))
+}
+
+# Extract ASVs from the OTU table
+selected_otu_table <- otu_table[asv_indexes, , drop = FALSE]
+
+# Extract corresponding taxonomy information
+selected_tax_table <- tax_table[asv_indexes, , drop = FALSE]
+
+otu_table(physeq.f.ra) <- selected_otu_table
+
+# Replace the taxonomic table in the existing phyloseq object
+tax_table(physeq.f.ra <- selected_tax_table
+
+otu_table(physeq.f.ra)
+
+head(tax_table(physeq.f.ra))
+
+# Now I want to glom by family 
+
+
+physeq.f.glom <- tax_glom(physeq.f.ra, "Family",NArm=FALSE) 
+
+physeq.f.glom@otu_table
+tax_table(physeq.f.glom)
+
+
+
+
+
+propData <- as.data.frame((otu_table(physeq.f.glom))) 
+head(propData)
+
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #within the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+  magrittr::set_names(c("taxa", "sample", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Sample.Type<-factor(plotDF1$Sample.Type) 
+
+mycolors2 <- c( "<3% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "AB1"= "#ffb79d","Desertifilaceae" = "#ff7f50", "Rubritaleaceae" = "#ff931d", "Stappiaceae" = "#ff6666", 
+              "Phycisphaeraceae"=  "#7FFF00",
+              "Microtrichaceae"=   "#8B3E2F",
+                "NS7 marine group"= "#8B8878",
+                "Sandaracinaceae"= "#556B2F",
+                "Cyclobacteriaceae"= "#8B4513",
+                "Moritellaceae"="#B8860B",
+               "Hyphomonadaceae"=  "#C1CDC1",
+               "Nitrincolaceae"= "#CD5555")
+
+
+
+unique(plotDF1$Family) 
+                      
+
+                      
+
+
+
+
+
+
+
+
+xx1<-ggplot(plotDF1, aes(x = sample, y = plotDF1$Family,fill=plotDF1$Family)) + 
+  geom_point(aes(size = as.numeric(relab)), alpha = 0.75, shape = 21) +  
+  scale_size_continuous(limits = c(0.00001, 100), range = c(1,14), breaks = c(.1,1,5,10,50,95)) +  
+  labs( x= "", y = "", size = "Mean Relative abundance", fill = "")  +  
+  theme(legend.key=element_blank()) +
+  scale_fill_manual(values = mycolors2,guide=FALSE) +
+  theme_bw()+
+  scale_y_discrete(limits = c("Unclassified_ASV255","Nitrincolaceae","AB1","Kangiellaceae","Desertifilaceae", "Stappiaceae", "Rubritaleaceae", "Xenococcaceae", "Moritellaceae", "Sandaracinaceae","Unclassified_ASV41","Amoebophilaceae","Simkaniaceae","Unclassified_ASV25",
+ "Hyphomonadaceae", "Pirellulaceae","Cyclobacteriaceae","NS7 marine group","Microtrichaceae", "Cryomorphaceae", "Phycisphaeraceae", "SAR86 clade","NS9 marine group","Vibrionaceae","Rhodobacteraceae", "Actinomarinaceae", "Blastocatellaceae","Cyanobiaceae", "Flavobacteriaceae", "Terasakiellaceae", "Cellvibrionaceae","Pasteurellaceae","Streptococcaceae","Cyanobacteriaceae","Comamonadaceae"))+ scale_x_discrete(labels=c('Healthy Control', 'Apparently Healthy', "Lesion"))  +theme(legend.position = "right", axis.text.y = element_text(size = 12),axis.text.x = element_text(colour = "black", size = 10, angle= 45, hjust= 1))  
+xx1
+
+
+ggsave(filename="bubble_TT_top100_pseudo44_by_try_tolook.png", plot=xx1,  device="png", width = 18, height = 20, units ="cm", dpi=300)
+
+
+
+
+
+
+``` 
+
+
+# Differiential abundance Amoxicillin Pre- and Post-Treatment
+
+##39 Differiential abundance graph
+
+```{r excluding nonrelevant data}
+#excluding the gentamicin treated colonies since n=3 for each group and lacked statistical power and just confused the paper. Six samples in total were excluded  (3 amoxicillin treated apparently healthy and 3 amoxicillin treated lesion) so they will be excluded 
+
+ps.no.D1 <- subset_samples(ps, Coral.Colony != "D1")
+ps.no.D4 <- subset_samples(ps.no.D1, Coral.Colony != "D4")
+ps<- subset_samples(ps.no.D4 , Coral.Colony != "D6")
+
+view(sample_data(ps)) 
+# check to make sure the phyloseq was correctly subsetted 
+ps
+sample_data(ps)
+```
+
+
+```{r RA of amox }
+
+# relative abundnace 
+ps.AH <- subset_samples(ps, Tissue.Type == "apparently.healthy")
+only.amox.ps <- subset_samples(ps.AH, Treatment == "amoxicillin")
+
+sample_data(only.amox.ps)
+ps.ra.amox <- transform_sample_counts(only.amox.ps, function(x) x*100/sum(x))
+
+
+top_taxa <- names(sort(taxa_sums(ps.ra.amox), decreasing = TRUE)[1:100]) 
+
+# taking the 100 highest abundant taxa out of the original only.amox phylsoeq so I have the regular counts + pseudo counts added to everything and not relative abundance 
+ps_100_amox<- prune_taxa(top_taxa, only.amox.ps)
+# only the top 100 taxa 
+
+View(sample_data(ps_100_amox))
+View(otu_table(ps_100_amox))
+
+```
+
+
+
+
+
+```{r}
+da_analysis_amox<-differentialTest(formula = ~Time.Point,
+                              phi.formula = ~Time.Point,
+                              formula_null = ~1,
+                              data = ps_100_amox,
+                              phi.formula_null = ~1,
+                              test="Wald",
+                              boot=FALSE,
+                              fdr_cutoff = 0.05)
+
+
+da_analysis_amox$significant_taxa 
+
+
+
+# [1] "ASV3"   "ASV4"   "ASV5"   "ASV10"  "ASV15"  "ASV16"  "ASV17"  "ASV19"  "ASV20"  "ASV21"  "ASV25"  "ASV29"  "ASV36" 
+# [14] "ASV39"  "ASV40"  "ASV41"  "ASV48"  "ASV56"  "ASV69"  "ASV72"  "ASV73"  "ASV76"  "ASV88"  "ASV94"  "ASV95"  "ASV96" 
+# [27] "ASV97"  "ASV101" "ASV110" "ASV111" "ASV119" "ASV120" "ASV126" "ASV139" "ASV146" "ASV184" "ASV187" "ASV194" "ASV200"
+# [40] "ASV204" "ASV230" "ASV278" "ASV283" "ASV362" "ASV394"
+
+```
+```{r}
+#from Becker et al 2022 
+#Write a function to extract the significant taxa and put it in a dataframe with a for loop so you can rearrange the levels of the taxa to make a nice ordered graph. 
+
+sigtaxto_df <- function(daout, psobj) {#2 or 3
+  df.out <- c()
+  for (i in 1:length(daout$significant_models)) { #from 1 to the number of significant taxa
+  df.out = rbind(df.out, daout$significant_models[[i]]$coefficients[2, 1:4])
+  #bind the sig.mcav row with coefficient, std. error, t value, Pr thing. coefficients[2,] is the DA model output.
+  }
+  asv = as.vector(daout$significant_taxa) #get significant ASVs
+  Class = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Class"))) #isolate class of significant Asvs
+  Order = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Order"))) #isolate order of significant ASVs
+  Family = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Family"))) #isolate family of significant ASVs
+  Family.fix = ifelse(Family == "", "unclassified", Family) #replace empty values with "unclassified"
+  Genus = as.vector(otu_to_taxonomy(data = psobj, daout$significant_taxa, level = c("Genus"))) #isolate Genus of singnificant ASVs
+  Genus.fix = ifelse(Genus == "", "unclassified", Genus) #replace empty values with "unclassified"
+  
+  df.bind <- as.data.frame(cbind(df.out, asv, Class, Order, Family.fix, Genus.fix)) #bind taxonomic info together, making sure to use the vectors with "unclassified"
+  df.bind$asvgenus <- paste0(df.bind$Family.fix, " (", df.bind$asv, ")") #make a concatenated column of ASV and Genus.
+  colnames(df.bind) <- c("Estimate", "StdError", "tvalue", "Pr", "asv", "Class", "Order", "Family", "Genus", "asvtaxa")
+  df.bind$Estimate = as.numeric(as.character(df.bind$Estimate)) #estimate column should be numeric 
+  df.bind$StdError = as.numeric(as.character(df.bind$StdError)) #stderror column should be numeric 
+  
+  return(df.bind)
+}
+
+
+
+
+
+```
+
+
+```{r}
+dlabsigtax<-sigtaxto_df(da_analysis_amox, ps_100_amox)
+dlabsigtax$asvtaxa <- factor(dlabsigtax$asvtaxa, levels = as.vector(dlabsigtax$asvtaxa))
+dlabsigtax$Family
+
+
+
+
+my.colors <-c( "<0.5% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "Balneolaceae" = "#ff748c", "Cellvibrionaceae" = "#ffc0eb", "Clostridiaceae"= "#ffa7b6", "Coxiellaceae"= "orange", "Cyclobacteriaceae"= "black", "Halieaceae" = "lightpink","Microtrichaceae"= "lightblue", "Micrococcaceae"= "white", "Moritellaceae" = "darkgrey", "Neisseriaceae" = "violet", "NS7 marine group"= "lightgreen" , "Phycisphaeraceae" = "skyblue", "Sandaracinaceae" = "navyblue", "Stappiaceae"= "maroon")
+
+
+
+
+
+dif_amox<-ggplot(dlabsigtax, aes(x = asvtaxa, y = Estimate, fill = Family)) +
+  geom_errorbar(aes(ymin = Estimate-StdError, ymax = Estimate+StdError), color = "black", width = .3, position=position_dodge(.9)) +
+  geom_point(size = 2.5, pch = 21) + 
+  scale_x_discrete(limits = rev(levels(dlabsigtax$asvtaxa))) +
+  scale_fill_manual(values = my.colors) +
+  coord_flip() +
+  theme_bw() +
+  labs(x = " ", y = "Coefficient")+
+  theme(legend.position = "none",axis.text.x=element_text(size=9),axis.text.y=element_text(size=9)) +ggtitle("Pre- and Post-Treatment")
+
+dif_amox
+asvtaxa
+
+ggsave(filename="DA_Pre_Post_pseudo44_top100.png", plot=dif_amox, device="png",width = 35, height = 20,unit ="cm",  dpi=300)
+
+```
+
+
+
+####40 Amoxicillin bubble plot of the significant ASVS at the family level 
+
+``` {r Tissue Type FAMILY bubbleplot }
+# no pseudo counts 
+only.amox <- only.amox.ps
+levels(as.factor(sample_data(only.amox)$Time.Point))
+
+physeq.f<-merge_samples(only.amox,"Time.Point", fun = mean)
+
+
+sample_data(physeq.f)
+otu_table(physeq.f)
+
+physeq.f.ra <- transform_sample_counts(physeq.f, function(x) x*100/sum(x))
+
+
+
+# Extract OTU table
+otu_table <- t(otu_table(physeq.f.ra))  # Transpose the OTU table
+
+# Extract taxonomy table
+tax_table <- tax_table(physeq.f.ra )
+
+# Find the ASVs you want to extract (replace ASV_ID_1, ASV_ID_2, etc. with the actual ASV identifiers)
+asv_ids_to_extract <- c("ASV3" ,  "ASV4" ,  "ASV5" ,  "ASV10" , "ASV15"  ,"ASV16" , "ASV17" , "ASV19" , "ASV20" , "ASV21",  "ASV25",  "ASV29",  "ASV36" , "ASV39" , "ASV40" , "ASV41",  "ASV48" , "ASV56" , "ASV69" , "ASV72" , "ASV73" , "ASV76" , "ASV88" , "ASV94" , "ASV95" , "ASV96" , "ASV97" , "ASV101" ,"ASV110", "ASV111" ,"ASV119", "ASV120", "ASV126", "ASV139" ,"ASV146" ,"ASV184", "ASV187", "ASV194", "ASV200", "ASV204" ,"ASV230", "ASV278" ,"ASV283", "ASV362", "ASV394")
+
+# Find the row numbers (indexes) of the ASVs you want to extract
+asv_indexes <- match(asv_ids_to_extract, rownames(otu_table))
+
+# Check for NA values (ASV IDs not found in the OTU table)
+if (any(is.na(asv_indexes))) {
+  not_found_asvs <- asv_ids_to_extract[is.na(asv_indexes)]
+  stop(paste("ASV IDs not found in the OTU table:", paste(not_found_asvs, collapse = ", ")))
+}
+
+# Extract ASVs from the OTU table
+selected_otu_table <- otu_table[asv_indexes, , drop = FALSE]
+
+# Extract corresponding taxonomy information
+selected_tax_table <- tax_table[asv_indexes, , drop = FALSE]
+
+otu_table(physeq.f.ra) <- selected_otu_table
+
+# Replace the taxonomic table in the existing phyloseq object
+tax_table(physeq.f.ra <- selected_tax_table
+
+otu_table(physeq.f.ra)
+
+head(tax_table(physeq.f.ra))
+
+# Now I want to glom by family 
+
+
+physeq.f.glom <- tax_glom(physeq.f.ra, "Family",NArm=FALSE) 
+
+physeq.f.glom@otu_table
+tax_table(physeq.f.glom)
+
+
+
+
+
+
+propData <- as.data.frame((otu_table(physeq.f.glom))) 
+head(propData)
+
+
+# set up your dataframe that will be used to make the relative abundance plot
+plotDF1 <- propData %>% #within the propData variable
+  rownames_to_column(var="taxa") %>% #set the rownames (sample IDS) to a column
+  melt() %>% #takes the data from wide to long format
+ magrittr::set_names(c("taxa", "sample", "relab")) #rename columns
+# inspect to make sure it worked
+head(plotDF1)
+
+# extract the taxonomy info into something that can be combined with the plot dataframe
+taxonomy.2 <- tax_table(physeq.f.glom) %>%
+  as.data.frame() %>%
+  rownames_to_column(var="taxa") #add the rownames to a column called taxa
+head(taxonomy.2)
+
+# combine dataframes merging by taxa, with the columns listed in select. ALSO CHANGE CLASS HERE IF YOU WANT A DIFFERENT TAXONOMIC RANK
+plotDF1 <- left_join(plotDF1, taxonomy.2, by="taxa") %>% select(taxa, sample, relab, Family) 
+head(plotDF1)
+
+# make dataframe of the sample data
+sampdata<-data.frame(sample_data(physeq.f.glom)) 
+metadata.2 <- sampdata %>%
+  rownames_to_column(var="sample") #make a column of rownames (sample)
+head(metadata.2)
+
+# combine plotDF1 and metadata.2 by sample name
+plotDF1 <- left_join(plotDF1, metadata.2, by="sample") 
+head(plotDF1) 
+
+# check class of things that should be factors.
+plotDF1$Time.Point<-factor(plotDF1$Time.Point) 
+
+mycolors2 <- c( "<3% abundance"='gray83',"Actinomarinaceae" ="darkorchid4","Amoebophilaceae"='#CC99FF',"Bacteriovoracaceae"= "#584B9F","Blastocatellaceae"="#6F196E",   "Comamonadaceae"="#340498", "Cryomorphaceae"="blue", "Cyanobiaceae"= "#324DA0", "Flavobacteriaceae"= "#359DC7",  "Fokiniaceae"="#0093A8","NS9 marine group"="turquoise" ,"Pirellulaceae"="#80C3AE","Rhodobacteraceae"= "#B5D5BE",  "Saprospiraceae"="#E7F1D5","SAR86 clade"='navajowhite1',"Simkaniaceae"="#F8E399", "Terasakiellaceae"="#F0B950" ,   "Unclassified_ASV16" = "#E88600","Unclassified_ASV21" ="#E47200", "Unclassified_ASV25"="#E35F15","Unclassified_ASV255"= "#CA3400", "Unclassified_ASV41"="#B72E48",  "Vibrionaceae"="#FFE93F" ,"Xenococcaceae"= "#A51122", "Cellvibrionaceae" ="#7A67EE","Cyanobacteriaceae"="#00EE76", "Enterobacteriaceae"="#C1FFC1","Kangiellaceae" ="#7FFFD4",  "Moraxellaceae" ="#A2CD5A", "Pasteurellaceae" = "#548B54", "Streptococcaceae"="#2E8B57", "AB1"= "#ffb79d","Desertifilaceae" = "#ff7f50", "Rubritaleaceae" = "#ff931d", "Stappiaceae" = "#ff6666", 
+              "Phycisphaeraceae"=  "#7FFF00",
+              "Microtrichaceae"=   "#8B3E2F",
+                "NS7 marine group"= "#8B8878",
+                "Sandaracinaceae"= "#556B2F",
+                "Cyclobacteriaceae"= "#8B4513",
+                "Moritellaceae"="#B8860B",
+               "Hyphomonadaceae"=  "#C1CDC1",
+               "Nitrincolaceae"= "#CD5555",
+              "Micrococcaceae" = "#CD8162" ,
+              "Alteromonadaceae"= "#BA55D3",
+              "Unclassified_ASV187" = "#BC8F8F", 
+              "Chroococcidiopsaceae" = "#2E8B57",
+              "Nitrosopumilaceae" = "#D02090")
+
+
+
+unique(plotDF1$Family) 
+
+
+
+xx1<-ggplot(plotDF1, aes(x = sample, y = plotDF1$Family,fill=plotDF1$Family)) + 
+  geom_point(aes(size = as.numeric(relab)), alpha = 0.75, shape = 21) +  
+  scale_size_continuous(limits = c(0.00001, 100), range = c(1,14), breaks = c(.1,1,5,10,50,95)) +  
+  labs( x= "", y = "", size = "Mean Relative abundance", fill = "")  +  
+  theme(legend.key=element_blank()) +
+  scale_fill_manual(values = mycolors2,guide=FALSE) +
+  theme_bw()+
+  scale_y_discrete(limits = c(  "Moraxellaceae","Nitrosopumilaceae","Nitrincolaceae","Alteromonadaceae","Comamonadaceae","Cryomorphaceae" , "Rhodobacteraceae" ,"Vibrionaceae","Cellvibrionaceae", "Unclassified_ASV41","NS9 marine group","Simkaniaceae","Fokiniaceae","Chroococcidiopsaceae", "Unclassified_ASV187","Micrococcaceae","Xenococcaceae","Unclassified_ASV16","Unclassified_ASV25","Unclassified_ASV21", "Terasakiellaceae", "Flavobacteriaceae"))+ scale_x_discrete(labels=c('Amoxicillin Pre-Treatment', 'Amoxicillin Post-Treatment'))  +theme(legend.position = "right", axis.text.y = element_text(size = 12),axis.text.x = element_text(colour = "black", size = 10, angle= 45, hjust= 1))  
+xx1
+
+
+ggsave(filename="bubble_only.amox_top100_pseudo44_by_try_5.png", plot=xx1,  device="png", width = 18, height = 18, units ="cm", dpi=300)
+
+  
+
+
+
+``` 

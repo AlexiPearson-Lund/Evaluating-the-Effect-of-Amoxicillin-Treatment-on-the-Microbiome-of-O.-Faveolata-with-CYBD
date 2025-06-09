@@ -1,0 +1,59 @@
+,sample_ID,Date.Sampled,Species,Disease,Coral.Colony,Treatment,Sample.Area,Tissue.Type,Sample.Type,Time.Point,Sample.Number,MrDNA sample form name,Treatment.Time.Type
+001A.gentamicin.pre_S1,Colony_D1,6/23/2020,Ofav,CYBD,D1,gentamicin,D1.A,apparently.healthy,gentamicin.apparently.healthy,T1,001A,001A.gentamicin.pre_S1,gentamicin.apparently.healthy.T1
+001B.untreated.pre_S1,Colony_D1,6/23/2020,Ofav,CYBD,D1,untreated,D1.B,apparently.healthy,untreated.apparently.healthy,T1,001B,001B.untreated.pre_S1,untreated.apparently.healthy.T1
+001A.gentamicin.post_S1,Colony_D1,6/25/2020,Ofav,CYBD,D1,gentamicin,D1.A,apparently.healthy,gentamicin.apparently.healthy,T2,001A,001A.gentamicin.post_S1,gentamicin.apparently.healthy.T2
+001B.untreated.post_S1,Colony_D1,6/25/2020,Ofav,CYBD,D1,untreated,D1.B,apparently.healthy,untreated.apparently.healthy,T2,001B,001B.untreated.post_S1,untreated.apparently.healthy.T2
+001A.gentamicin.lesion_S1,Colony_D1,6/25/2020,Ofav,CYBD,D1,gentamicin,D1.A,lesion,gentamicin.lesion,T2,001A,001A.gentamicin.lesion_S1,gentamicin.lesion.T2
+001B.untreated.lesion_S1,Colony_D1,6/25/2020,Ofav,CYBD,D1,untreated,D1.B,lesion,untreated.lesion,T2,001B,001B.untreated.lesion_S1,untreated.lesion.T2
+002A.amox.pre_S1,Colony_D2,6/23/2020,Ofav,CYBD,D2,amoxicillin,D2.A,apparently.healthy,amoxicillin.apparently.healthy,T1,002A,002A.amox.pre_S1,amoxicillin.apparently.healthy.T1
+002B.untreated.pre_S1,Colony_D2,6/23/2020,Ofav,CYBD,D2,untreated,D2.B,apparently.healthy,untreated.apparently.healthy,T1,002B,002B.untreated.pre_S1,untreated.apparently.healthy.T1
+002A.amox.post_S1,Colony_D2,6/25/2020,Ofav,CYBD,D2,amoxicillin,D2.A,apparently.healthy,amoxicillin.apparently.healthy,T2,002A,002A.amox.post_S1,amoxicillin.apparently.healthy.T2
+002B.untreated.post_S1,Colony_D2,6/25/2020,Ofav,CYBD,D2,untreated,D2.B,apparently.healthy,untreated.apparently.healthy,T2,002B,002B.untreated.post_S1,untreated.apparently.healthy.T2
+002A.amox.lesion_S1,Colony_D2,6/25/2020,Ofav,CYBD,D2,amoxicillin,D2.A,lesion,amoxicillin.lesion,T2,002A,002A.amox.lesion_S1,amoxicillin.lesion.T2
+002B.untreated.lesion_S1,Colony_D2,6/25/2020,Ofav,CYBD,D2,untreated,D2.B,lesion,untreated.lesion,T2,002B,002B.untreated.lesion_S1,untreated.lesion.T2
+003A.amox.pre_S1,Colony_D3,6/23/2020,Ofav,CYBD,D3,amoxicillin,D3.A,apparently.healthy,amoxicillin.apparently.healthy,T1,003A,003A.amox.pre_S1,amoxicillin.apparently.healthy.T1
+003B.untreated.pre_S1,Colony_D3,6/23/2020,Ofav,CYBD,D3,untreated,D3.B,apparently.healthy,untreated.apparently.healthy,T1,003B,003B.untreated.pre_S1,untreated.apparently.healthy.T1
+003A.amox.post_S1,Colony_D3,6/25/2020,Ofav,CYBD,D3,amoxicillin,D3.A,apparently.healthy,amoxicillin.apparently.healthy,T2,003A,003A.amox.post_S1,amoxicillin.apparently.healthy.T2
+003B.untreated.post_S1,Colony_D3,6/25/2020,Ofav,CYBD,D3,untreated,D3.B,apparently.healthy,untreated.apparently.healthy,T2,003B,003B.untreated.post_S1,untreated.apparently.healthy.T2
+003A.amox.lesion_S1,Colony_D3,6/25/2020,Ofav,CYBD,D3,amoxicillin,D3.A,lesion,amoxicillin.lesion,T2,003A,003A.amox.lesion_S1,amoxicillin.lesion.T2
+003B.untreated.lesion_S1,Colony_D3,6/25/2020,Ofav,CYBD,D3,untreated,D3.B,lesion,untreated.lesion,T2,003B,003B.untreated.lesion_S1,untreated.lesion.T2
+004A.gentamicin.pre_S1,Colony_D4,6/23/2020,Ofav,CYBD,D4,gentamicin,D4.A,apparently.healthy,gentamicin.apparently.healthy,T1,004A,004A.gentamicin.pre_S1,gentamicin.apparently.healthy.T1
+004B.untreated.pre_S1,Colony_D4,6/23/2020,Ofav,CYBD,D4,untreated,D4.B,apparently.healthy,untreated.apparently.healthy,T1,004B,004B.untreated.pre_S1,untreated.apparently.healthy.T1
+004A.gentamicin.post_S1,Colony_D4,6/25/2020,Ofav,CYBD,D4,gentamicin,D4.A,apparently.healthy,gentamicin.apparently.healthy,T2,004A,004A.gentamicin.post_S1,gentamicin.apparently.healthy.T2
+004B.untreated.post_S1,Colony_D4,6/25/2020,Ofav,CYBD,D4,untreated,D4.B,apparently.healthy,untreated.apparently.healthy,T2,004B,004B.untreated.post_S1,untreated.apparently.healthy.T2
+004A.gentamicin.lesion_S1,Colony_D4,6/25/2020,Ofav,CYBD,D4,gentamicin,D4.A,lesion,gentamicin.lesion,T2,004A,004A.gentamicin.lesion_S1,gentamicin.lesion.T2
+004B.untreated.lesion_S1,Colony_D4,6/25/2020,Ofav,CYBD,D4,untreated,D4.B,lesion,untreated.lesion,T2,004B,004B.untreated.lesion_S1,untreated.lesion.T2
+005A.amox.pre_S1,Colony_D5,6/23/2020,Ofav,CYBD,D5,amoxicillin,D5.A,apparently.healthy,amoxicillin.apparently.healthy,T1,005A,005A.amox.pre_S1,amoxicillin.apparently.healthy.T1
+005B.untreated.pre_S1,Colony_D5,6/23/2020,Ofav,CYBD,D5,untreated,D5.B,apparently.healthy,untreated.apparently.healthy,T1,005B,005B.untreated.pre_S1,untreated.apparently.healthy.T1
+005A.amox.post_S1,Colony_D5,6/25/2020,Ofav,CYBD,D5,amoxicillin,D5.A,apparently.healthy,amoxicillin.apparently.healthy,T2,005A,005A.amox.post_S1,amoxicillin.apparently.healthy.T2
+005B.untreated.post_S1,Colony_D5,6/25/2020,Ofav,CYBD,D5,untreated,D5.B,apparently.healthy,untreated.apparently.healthy,T2,005B,005B.untreated.post_S1,untreated.apparently.healthy.T2
+005A.amox.lesion_S1,Colony_D5,6/25/2020,Ofav,CYBD,D5,amoxicillin,D5.A,lesion,amoxicillin.lesion,T2,005A,005A.amox.lesion_S1,amoxicillin.lesion.T2
+005B.untreated.lesion_S1,Colony_D5,6/25/2020,Ofav,CYBD,D5,untreated,D5.B,lesion,untreated.lesion,T2,005B,005B.untreated.lesion_S1,untreated.lesion.T2
+006A.gentamicin.pre_S1,Colony_D6,6/23/2020,Ofav,CYBD,D6,gentamicin,D6.A,apparently.healthy,gentamicin.apparently.healthy,T1,006A,006A.gentamicin.pre_S1,gentamicin.apparently.healthy.T1
+006B.untreated.pre_S1,Colony_D6,6/23/2020,Ofav,CYBD,D6,untreated,D6.B,apparently.healthy,untreated.apparently.healthy,T1,006B,006B.untreated.pre_S1,untreated.apparently.healthy.T1
+006A.gentamicin.post_S1,Colony_D6,6/25/2020,Ofav,CYBD,D6,gentamicin,D6.A,apparently.healthy,gentamicin.apparently.healthy,T2,006A,006A.gentamicin.post_S1,gentamicin.apparently.healthy.T2
+006B.untreated.post_S1,Colony_D6,6/25/2020,Ofav,CYBD,D6,untreated,D6.B,apparently.healthy,untreated.apparently.healthy,T2,006B,006B.untreated.post_S1,untreated.apparently.healthy.T2
+006A.gentamicin.lesion_S1,Colony_D6,6/25/2020,Ofav,CYBD,D6,gentamicin,D6.A,lesion,gentamicin.lesion,T2,006A,006A.gentamicin.lesion_S1,gentamicin.lesion.T2
+006B.untreated.lesion_S1,Colony_D6,6/25/2020,Ofav,CYBD,D6,untreated,D6.B,lesion,untreated.lesion,T2,006B,006B.untreated.lesion_S1,untreated.lesion.T2
+007A.amox.pre_S1,Colony_D7,6/23/2020,Ofav,CYBD,D7,amoxicillin,D7.A,apparently.healthy,amoxicillin.apparently.healthy,T1,007A,007A.amox.pre_S1,amoxicillin.apparently.healthy.T1
+007B.untreated.pre_S1,Colony_D7,6/23/2020,Ofav,CYBD,D7,untreated,D7.B,apparently.healthy,untreated.apparently.healthy,T1,007B,007B.untreated.pre_S1,untreated.apparently.healthy.T1
+007A.amox.post_S1,Colony_D7,6/25/2020,Ofav,CYBD,D7,amoxicillin,D7.A,apparently.healthy,amoxicillin.apparently.healthy,T2,007A,007A.amox.post_S1,amoxicillin.apparently.healthy.T2
+007B.untreated.post_S1,Colony_D7,6/25/2020,Ofav,CYBD,D7,untreated,D7.B,apparently.healthy,untreated.apparently.healthy,T2,007B,007B.untreated.post_S1,untreated.apparently.healthy.T2
+007A.amox.lesion_S1,Colony_D7,6/25/2020,Ofav,CYBD,D7,amoxicillin,D7.A,lesion,amoxicillin.lesion,T2,007A,007A.amox.lesion_S1,amoxicillin.lesion.T2
+007B.untreated.lesion_S1,Colony_D7,6/25/2020,Ofav,CYBD,D7,untreated,D7.B,lesion,untreated.lesion,T2,007B,007B.untreated.lesion_S1,untreated.lesion.T2
+008A.amox.pre_S1,Colony_D8,6/23/2020,Ofav,CYBD,D8,amoxicillin,D8.A,apparently.healthy,amoxicillin.apparently.healthy,T1,008A,008A.amox.pre_S1,amoxicillin.apparently.healthy.T1
+008B.untreated.pre_S1,Colony_D8,6/23/2020,Ofav,CYBD,D8,untreated,D8.B,apparently.healthy,untreated.apparently.healthy,T1,008B,008B.untreated.pre_S1,untreated.apparently.healthy.T1
+008A.amox.post_S1,Colony_D8,6/25/2020,Ofav,CYBD,D8,amoxicillin,D8.A,apparently.healthy,amoxicillin.apparently.healthy,T2,008A,008A.amox.post_S1,amoxicillin.apparently.healthy.T2
+008B.untreated.post_S1,Colony_D8,6/25/2020,Ofav,CYBD,D8,untreated,D8.B,apparently.healthy,untreated.apparently.healthy,T2,008B,008B.untreated.post_S1,untreated.apparently.healthy.T2
+008A.amox.lesion_S1,Colony_D8,6/25/2020,Ofav,CYBD,D8,amoxicillin,D8.A,lesion,amoxicillin.lesion,T2,008A,008A.amox.lesion_S1,amoxicillin.lesion.T2
+008B.untreated.lesion_S1,Colony_D8,6/25/2020,Ofav,CYBD,D8,untreated,D8.B,lesion,untreated.lesion,T2,008B,008B.untreated.lesion_S1,untreated.lesion.T2
+Healthy.Ofav.1.pre_S1,Colony_H1,6/23/2020,Ofav,Healthy,H1,control,H1,apparently.healthy,control.healthy,T1,Healthy Ofav 1,Healthy.Ofav.1.pre_S1,control.healthy.T1
+Healthy.Ofav.1.post_S1,Colony_H1,6/25/2020,Ofav,Healthy,H1,control,H1,apparently.healthy,control.healthy,T2,Healthy Ofav 1,Healthy.Ofav.1.post_S1,control.healthy.T2
+Healthy.Ofav.2.pre_S1,Colony_H2,6/23/2020,Ofav,Healthy,H2,control,H2,apparently.healthy,control.healthy,T1,Healthy Ofav 2,Healthy.Ofav.2.pre_S1,control.healthy.T1
+Healthy.Ofav.2.post_S1,Colony_H2,6/25/2020,Ofav,Healthy,H2,control,H2,apparently.healthy,control.healthy,T2,Healthy Ofav 2,Healthy.Ofav.2.post_S1,control.healthy.T2
+Healthy.Ofav.3.pre_S1,Colony_H3,6/23/2020,Ofav,Healthy,H3,control,H3,apparently.healthy,control.healthy,T1,Healthy Ofav 3,Healthy.Ofav.3.pre_S1,control.healthy.T1
+Healthy.Ofav.3.post_S1,Colony_H3,6/25/2020,Ofav,Healthy,H3,control,H3,apparently.healthy,control.healthy,T2,Healthy Ofav 3,Healthy.Ofav.3.post_S1,control.healthy.T2
+Healthy.Ofav.4.pre_S1,Colony_H4,6/23/2020,Ofav,Healthy,H4,control,H4,apparently.healthy,control.healthy,T1,Healthy Ofav 4,Healthy.Ofav.4.pre_S1,control.healthy.T1
+Healthy.Ofav.4.post_S1,Colony_H4,6/25/2020,Ofav,Healthy,H4,control,H4,apparently.healthy,control.healthy,T2,Healthy Ofav 4,Healthy.Ofav.4.post_S1,control.healthy.T2
+Healthy.Ofav.5.pre_S1,Colony_H5,6/23/2020,Ofav,Healthy,H5,control,H5,apparently.healthy,control.healthy,T1,Healthy Ofav 5,Healthy.Ofav.5.pre_S1,control.healthy.T1
+Healthy.Ofav.5.post_S1,Colony_H5,6/25/2020,Ofav,Healthy,H5,control,H5,apparently.healthy,control.healthy,T2,Healthy Ofav 5,Healthy.Ofav.5.post_S1,control.healthy.T2
